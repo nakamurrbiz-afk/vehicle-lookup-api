@@ -4,6 +4,7 @@ import { adapterRegistry } from '../adapters/adapter.registry';
 import { enricherRegistry } from '../enrichers/enricher.registry';
 import { normalize } from '../normalizer/vehicle.normalizer';
 import { findSample } from '../mocks/sample-vehicles';
+import { incrementAndGet } from '../services/popularity.service';
 import { config } from '../config/env';
 
 export async function lookupRoute(app: FastifyInstance): Promise<void> {
@@ -21,11 +22,15 @@ export async function lookupRoute(app: FastifyInstance): Promise<void> {
     const { plate, country } = queryParsed.data;
     const cacheKey = `vehicle:${country}:${plate}`;
 
+    // Always increment popularity (even for cache hits)
+    const popularityCount = await incrementAndGet(app.cache, plate, country);
+
     // Cache HIT
     const cached = await app.cache.get(cacheKey);
     if (cached) {
       const result: VehicleResponse = JSON.parse(cached);
       result.cachedAt = result.cachedAt ?? new Date().toISOString();
+      result.popularityCount = popularityCount;
       return reply.send(result);
     }
 
@@ -33,7 +38,7 @@ export async function lookupRoute(app: FastifyInstance): Promise<void> {
     const sampleResult = findSample(plate, country);
     const adapterResult = sampleResult ?? await adapterRegistry.get(country).lookup(plate);
     const enrichedResult = await enricherRegistry.enrich(country, adapterResult);
-    const vehicleResponse = normalize(enrichedResult, null);
+    const vehicleResponse = normalize(enrichedResult, null, popularityCount);
 
     await app.cache.set(cacheKey, JSON.stringify(vehicleResponse), config.cacheTtlSeconds);
 

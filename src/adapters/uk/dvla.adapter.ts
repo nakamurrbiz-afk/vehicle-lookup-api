@@ -62,6 +62,7 @@ export class DvlaAdapter implements IVehicleAdapter {
       colour: data.colour ?? null,
       fuelType: data.fuelType ?? null,
       engineSize: data.engineCapacity ?? null,
+      co2Emissions: data.co2Emissions ?? null,
     };
   }
 }

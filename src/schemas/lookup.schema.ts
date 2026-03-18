@@ -12,19 +12,45 @@ export const LookupQuerySchema = z.object({
     .transform((s) => s.toUpperCase()),
 });
 
-export const VehicleResponseSchema = z.object({
-  plate: z.string(),
-  country: z.string(),
-  make: z.string().nullable(),
-  model: z.string().nullable(),
-  year: z.number().int().nullable(),
-  colour: z.string().nullable(),
-  fuelType: z.string().nullable(),
-  vin: z.string().nullable(),
-  engineSize: z.number().nullable(),
-  source: z.string(),
-  cachedAt: z.string().nullable(),
+const MileageRecordSchema = z.object({
+  date:    z.string(),
+  mileage: z.number(),
+  passed:  z.boolean(),
 });
 
-export type LookupQuery = z.infer<typeof LookupQuerySchema>;
+const RunningCostSchema = z.object({
+  fuelPerYear:  z.string(),
+  totalPerYear: z.string(),
+  perMile:      z.string(),
+  source:       z.string(),
+});
+
+const InsuranceGroupSchema = z.object({
+  min:   z.number(),
+  max:   z.number(),
+  label: z.string(),
+});
+
+export const VehicleResponseSchema = z.object({
+  plate:           z.string(),
+  country:         z.string(),
+  make:            z.string().nullable(),
+  model:           z.string().nullable(),
+  year:            z.number().int().nullable(),
+  colour:          z.string().nullable(),
+  fuelType:        z.string().nullable(),
+  vin:             z.string().nullable(),
+  engineSize:      z.number().nullable(),
+  co2Emissions:    z.number().nullable(),
+  mileageHistory:  z.array(MileageRecordSchema),
+  commonFailures:  z.array(z.string()),
+  runningCost:     RunningCostSchema.nullable(),
+  euroncapStars:   z.number().int().nullable(),
+  insuranceGroup:  InsuranceGroupSchema.nullable(),
+  popularityCount: z.number().int(),
+  source:          z.string(),
+  cachedAt:        z.string().nullable(),
+});
+
+export type LookupQuery     = z.infer<typeof LookupQuerySchema>;
 export type VehicleResponse = z.infer<typeof VehicleResponseSchema>;

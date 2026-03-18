@@ -1,3 +1,9 @@
+export interface MileageRecord {
+  date: string;    // ISO date string
+  mileage: number;
+  passed: boolean;
+}
+
 export interface AdapterResult {
   plate: string;
   country: string;
@@ -8,6 +14,9 @@ export interface AdapterResult {
   fuelType?: string | null;
   vin?: string | null;
   engineSize?: number | null;
+  co2Emissions?: number | null;
+  mileageHistory?: MileageRecord[];
+  commonFailures?: string[];
 }
 
 export interface IVehicleAdapter {

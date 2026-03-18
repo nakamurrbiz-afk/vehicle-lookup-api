@@ -1,7 +1,8 @@
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { fetchCarImage } from '../services/wikipedia.service';
+import { fetchCarImage } from '../services/car-image.service';
 import { buildListings, ListingLink } from '../services/listings.service';
+import { getNewCarPrice } from '../services/new-car-price.service';
 import {
   scrapeAutoTraderUK,
   scrapeMotorsUK,
@@ -11,14 +12,71 @@ import {
 
 const QuerySchema = z.object({
   make:     z.string().min(1),
-  model:    z.string().optional(),   // optional — null when DVSA enrichment is pending
+  model:    z.string().optional(),
   year:     z.coerce.number().int().optional(),
   country:  z.string().length(2).transform(s => s.toUpperCase()),
-  postcode: z.string().optional(),   // UK postcode or US zip code
+  postcode: z.string().optional(),
 });
 
+interface PriceSummary {
+  new:  { from: string; to: string; note?: string; source: string } | null;
+  used: { from: string; source: string } | null;
+}
+
+async function buildPriceSummary(
+  make: string,
+  model: string | null,
+  year: number | null,
+  country: string,
+): Promise<PriceSummary> {
+  const newPrice = getNewCarPrice(make, model);
+
+  let usedFrom: string | null = null;
+  let usedSource: string | null = null;
+
+  if (country === 'GB' && model) {
+    const yearFrom = year ? year - 2 : undefined;
+    const [at, mo] = await Promise.allSettled([
+      scrapeAutoTraderUK(make, model, yearFrom),
+      scrapeMotorsUK(make, model),
+    ]);
+    const candidates = [
+      at.status === 'fulfilled' ? at.value.minPrice : null,
+      mo.status === 'fulfilled' ? mo.value.minPrice : null,
+    ].filter(Boolean) as string[];
+
+    if (candidates.length > 0) {
+      usedFrom   = candidates[0];
+      usedSource = at.status === 'fulfilled' && at.value.minPrice
+        ? 'AutoTrader UK'
+        : 'Motors.co.uk';
+    }
+  }
+
+  if (country === 'US' && model) {
+    const [cg, at] = await Promise.allSettled([
+      scrapeCarGurusUS(make, model),
+      scrapeAutoTraderUS(make, model),
+    ]);
+    const candidates = [
+      cg.status === 'fulfilled' ? cg.value.minPrice : null,
+      at.status === 'fulfilled' ? at.value.minPrice : null,
+    ].filter(Boolean) as string[];
+
+    if (candidates.length > 0) {
+      usedFrom   = candidates[0];
+      usedSource = 'CarGurus / AutoTrader US';
+    }
+  }
+
+  return {
+    new:  newPrice ? { from: newPrice.from, to: newPrice.to, note: newPrice.note, source: newPrice.source } : null,
+    used: usedFrom ? { from: usedFrom, source: usedSource! } : null,
+  };
+}
+
 // Attach scraped prices to each listing entry
-async function enrichWithPrices(
+async function enrichListingsWithPrices(
   listings: ListingLink[],
   make: string,
   model: string | null,
@@ -31,7 +89,6 @@ async function enrichWithPrices(
       model ? scrapeAutoTraderUK(make, model, yearFrom) : Promise.resolve({ minPrice: null, count: null }),
       model ? scrapeMotorsUK(make, model)               : Promise.resolve({ minPrice: null, count: null }),
     ]);
-
     return listings.map(l => {
       if (l.id === 'autotrader-uk' && at.status === 'fulfilled')
         return { ...l, minPrice: at.value.minPrice };
@@ -40,13 +97,11 @@ async function enrichWithPrices(
       return l;
     });
   }
-
   if (country === 'US') {
     const [cg, at] = await Promise.allSettled([
       model ? scrapeCarGurusUS(make, model)   : Promise.resolve({ minPrice: null, count: null }),
       model ? scrapeAutoTraderUS(make, model) : Promise.resolve({ minPrice: null, count: null }),
     ]);
-
     return listings.map(l => {
       if (l.id === 'cargurus-us'   && cg.status === 'fulfilled')
         return { ...l, minPrice: cg.value.minPrice };
@@ -55,12 +110,10 @@ async function enrichWithPrices(
       return l;
     });
   }
-
   return listings;
 }
 
 export async function mediaRoute(app: FastifyInstance): Promise<void> {
-  // GET /v1/vehicle-media?make=Toyota&model=Alphard&year=2024&country=GB
   app.get<{ Querystring: Record<string, string> }>('/vehicle-media', async (request, reply) => {
     const parsed = QuerySchema.safeParse(request.query);
     if (!parsed.success) {
@@ -73,15 +126,12 @@ export async function mediaRoute(app: FastifyInstance): Promise<void> {
 
     const { make, year, country, postcode } = parsed.data;
     const model = parsed.data.model ?? null;
-    // postcode is user-specific → excluded from cache key (each user gets fresh URLs)
-    const cacheKey = `media:v3:${country}:${make}:${model ?? 'unknown'}:${year ?? 'any'}`.toLowerCase();
+    const cacheKey = `media:v4:${country}:${make}:${model ?? 'unknown'}:${year ?? 'any'}`.toLowerCase();
 
-    // For cached results, still inject the current postcode into listing URLs
     const cached = await app.cache.get(cacheKey);
     if (cached) {
       const result = JSON.parse(cached);
       if (postcode) {
-        // Rebuild listings with the user's postcode (image stays cached)
         result.listings = buildListings(make, model, year ?? null, country, postcode);
       }
       return reply.send(result);
@@ -89,17 +139,15 @@ export async function mediaRoute(app: FastifyInstance): Promise<void> {
 
     const baseListings = buildListings(make, model, year ?? null, country, postcode);
 
-    // Fetch image and prices in parallel (prices are best-effort)
-    const [image, listings] = await Promise.all([
+    const [image, listings, prices] = await Promise.all([
       fetchCarImage(make, model, year ?? null),
-      enrichWithPrices(baseListings, make, model, year ?? null, country),
+      enrichListingsWithPrices(baseListings, make, model, year ?? null, country),
+      buildPriceSummary(make, model, year ?? null, country),
     ]);
 
-    const result = { image, listings };
+    const result = { image, listings, prices };
 
-    // Cache: 30 min for price data (changes during the day)
     await app.cache.set(cacheKey, JSON.stringify(result), 1800);
-
     return reply.send(result);
   });
 }

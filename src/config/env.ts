@@ -15,9 +15,13 @@ const EnvSchema = z.object({
   PLATE_TO_VIN_API_KEY: z.string().min(1).default('PENDING'),
   PLATE_TO_VIN_API_URL: z.string().url().default('https://api.plate2vin.com/v1/lookup'),
 
-  // UK DVSA MOT History (model enrichment)
-  DVSA_MOT_API_KEY: z.string().min(1).default('PENDING'),
-  DVSA_MOT_API_URL: z.string().url().default('https://beta.check-mot.service.gov.uk/trade/vehicles/mot-tests'),
+  // UK DVSA MOT History (model enrichment) — OAuth2 + API key
+  DVSA_MOT_API_KEY:      z.string().min(1).default('PENDING'),
+  DVSA_MOT_API_URL:      z.string().url().default('https://history.mot.api.gov.uk/v1/trade/vehicles/registration'),
+  DVSA_CLIENT_ID:        z.string().default(''),
+  DVSA_CLIENT_SECRET:    z.string().default(''),
+  DVSA_TOKEN_URL:        z.string().url().default('https://login.microsoftonline.com/common/oauth2/v2.0/token'),
+  DVSA_SCOPE:            z.string().default('https://tapi.dvsa.gov.uk/.default'),
 
   // US NHTSA (free)
   NHTSA_API_URL: z.string().url().default('https://vpic.nhtsa.dot.gov/api/vehicles'),
@@ -25,6 +29,9 @@ const EnvSchema = z.object({
   // Cache
   REDIS_URL: z.string().optional(),
   CACHE_TTL_SECONDS: z.coerce.number().default(86400),
+
+  // Unsplash car imagery (free key at unsplash.com/developers)
+  UNSPLASH_ACCESS_KEY: z.string().default(''),
 
   // HTTP
   HTTP_TIMEOUT_MS: z.coerce.number().default(8000),
@@ -52,10 +59,17 @@ export const config = {
     apiUrl: env.PLATE_TO_VIN_API_URL,
   },
   dvsaMot: {
-    apiKey: env.DVSA_MOT_API_KEY,
-    apiUrl: env.DVSA_MOT_API_URL,
+    apiKey:      env.DVSA_MOT_API_KEY,
+    apiUrl:      env.DVSA_MOT_API_URL,
+    clientId:    env.DVSA_CLIENT_ID,
+    clientSecret:env.DVSA_CLIENT_SECRET,
+    tokenUrl:    env.DVSA_TOKEN_URL,
+    scope:       env.DVSA_SCOPE,
   },
   nhtsaApiUrl: env.NHTSA_API_URL,
+  unsplash: {
+    accessKey: env.UNSPLASH_ACCESS_KEY,
+  },
   redisUrl: env.REDIS_URL,
   cacheTtlSeconds: env.CACHE_TTL_SECONDS,
   httpTimeoutMs: env.HTTP_TIMEOUT_MS,
