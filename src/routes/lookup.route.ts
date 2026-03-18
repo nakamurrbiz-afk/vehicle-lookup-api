@@ -1,6 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import { LookupQuerySchema, VehicleResponse } from '../schemas/lookup.schema';
 import { adapterRegistry } from '../adapters/adapter.registry';
+import { enricherRegistry } from '../enrichers/enricher.registry';
 import { normalize } from '../normalizer/vehicle.normalizer';
 import { findSample } from '../mocks/sample-vehicles';
 import { config } from '../config/env';
@@ -31,7 +32,8 @@ export async function lookupRoute(app: FastifyInstance): Promise<void> {
     // Cache MISS — check sample data first, then delegate to adapter
     const sampleResult = findSample(plate, country);
     const adapterResult = sampleResult ?? await adapterRegistry.get(country).lookup(plate);
-    const vehicleResponse = normalize(adapterResult, null);
+    const enrichedResult = await enricherRegistry.enrich(country, adapterResult);
+    const vehicleResponse = normalize(enrichedResult, null);
 
     await app.cache.set(cacheKey, JSON.stringify(vehicleResponse), config.cacheTtlSeconds);
 

@@ -15,6 +15,10 @@ const EnvSchema = z.object({
   PLATE_TO_VIN_API_KEY: z.string().min(1).default('PENDING'),
   PLATE_TO_VIN_API_URL: z.string().url().default('https://api.plate2vin.com/v1/lookup'),
 
+  // UK DVSA MOT History (model enrichment)
+  DVSA_MOT_API_KEY: z.string().min(1).default('PENDING'),
+  DVSA_MOT_API_URL: z.string().url().default('https://beta.check-mot.service.gov.uk/trade/vehicles/mot-tests'),
+
   // US NHTSA (free)
   NHTSA_API_URL: z.string().url().default('https://vpic.nhtsa.dot.gov/api/vehicles'),
 
@@ -46,6 +50,10 @@ export const config = {
   plateToVin: {
     apiKey: env.PLATE_TO_VIN_API_KEY,
     apiUrl: env.PLATE_TO_VIN_API_URL,
+  },
+  dvsaMot: {
+    apiKey: env.DVSA_MOT_API_KEY,
+    apiUrl: env.DVSA_MOT_API_URL,
   },
   nhtsaApiUrl: env.NHTSA_API_URL,
   redisUrl: env.REDIS_URL,
