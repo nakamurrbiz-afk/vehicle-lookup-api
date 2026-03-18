@@ -1,0 +1,31 @@
+import { AdapterResult } from '../adapters/adapter.interface';
+import { VehicleResponse } from '../schemas/lookup.schema';
+
+function titleCase(str: string): string {
+  return str
+    .toLowerCase()
+    .split(' ')
+    .map((word) => (word ? word[0].toUpperCase() + word.slice(1) : word))
+    .join(' ');
+}
+
+const SOURCE_MAP: Record<string, string> = {
+  GB: 'dvla',
+  US: 'nhtsa',
+};
+
+export function normalize(raw: AdapterResult, cachedAt: string | null = null): VehicleResponse {
+  return {
+    plate: raw.plate,
+    country: raw.country,
+    make: raw.rawMake ? titleCase(raw.rawMake) : null,
+    model: raw.rawModel ? titleCase(raw.rawModel) : null,
+    year: raw.rawYear ?? null,
+    colour: raw.colour ? titleCase(raw.colour) : null,
+    fuelType: raw.fuelType ? titleCase(raw.fuelType) : null,
+    vin: raw.vin ?? null,
+    engineSize: raw.engineSize ?? null,
+    source: SOURCE_MAP[raw.country.toUpperCase()] ?? 'unknown',
+    cachedAt,
+  };
+}
