@@ -11,9 +11,10 @@ const EnvSchema = z.object({
   DVLA_API_KEY: z.string().min(1).default('PENDING'),
   DVLA_API_URL: z.string().url().default('https://driver-vehicle-licensing.api.gov.uk/vehicle-enquiry/v1/vehicles'),
 
-  // US Plate-to-VIN (commercial)
-  PLATE_TO_VIN_API_KEY: z.string().min(1).default('PENDING'),
-  PLATE_TO_VIN_API_URL: z.string().url().default('https://api.plate2vin.com/v1/lookup'),
+  // US Plate-to-VIN (RapidAPI: vehicle-plate-to-vin)
+  PLATE_TO_VIN_API_KEY:       z.string().min(1).default('PENDING'),
+  PLATE_TO_VIN_API_URL:       z.string().url().default('https://vehicle-plate-to-vin.p.rapidapi.com/lookup'),
+  PLATE_TO_VIN_RAPIDAPI_HOST: z.string().default('vehicle-plate-to-vin.p.rapidapi.com'),
 
   // UK DVSA MOT History (model enrichment) — OAuth2 + API key
   DVSA_MOT_API_KEY:      z.string().min(1).default('PENDING'),
@@ -55,8 +56,9 @@ export const config = {
     apiUrl: env.DVLA_API_URL,
   },
   plateToVin: {
-    apiKey: env.PLATE_TO_VIN_API_KEY,
-    apiUrl: env.PLATE_TO_VIN_API_URL,
+    apiKey:       env.PLATE_TO_VIN_API_KEY,
+    apiUrl:       env.PLATE_TO_VIN_API_URL,
+    rapidApiHost: env.PLATE_TO_VIN_RAPIDAPI_HOST,
   },
   dvsaMot: {
     apiKey:      env.DVSA_MOT_API_KEY,

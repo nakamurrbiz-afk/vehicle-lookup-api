@@ -9,9 +9,8 @@ import {
   UpstreamRateLimitError,
 } from '../../errors/app.errors';
 
-// Commercial plate-to-VIN API response schema.
-// Update this schema when a vendor is selected.
-// Current placeholder targets Plate2VIN-style response.
+// vehicle-plate-to-vin RapidAPI response schema
+// API: https://rapidapi.com/jgentes/api/vehicle-plate-to-vin
 const PlateToVinResponseSchema = z.object({
   vin: z.string(),
   state: z.string().optional(),
@@ -20,12 +19,12 @@ const PlateToVinResponseSchema = z.object({
 export class PlateToVinAdapter implements IVehicleAdapter {
   readonly country = 'US';
 
-  async lookup(plate: string): Promise<AdapterResult> {
+  async lookup(plate: string, state?: string): Promise<AdapterResult> {
     if (config.plateToVin.apiKey === 'PENDING') {
       throw new UpstreamError('PlateToVin', undefined, 'US Plate-to-VIN API key not configured');
     }
 
-    const vin = await this.resolveVin(plate);
+    const vin = await this.resolveVin(plate, state);
     const vehicleData = await decodeVin(vin);
 
     if (!vehicleData.make && !vehicleData.model && !vehicleData.year) {
@@ -35,30 +34,31 @@ export class PlateToVinAdapter implements IVehicleAdapter {
     return {
       plate,
       country: this.country,
-      rawMake: vehicleData.make,
+      rawMake:  vehicleData.make,
       rawModel: vehicleData.model,
-      rawYear: vehicleData.year,
+      rawYear:  vehicleData.year,
       fuelType: vehicleData.fuelType,
       vin,
     };
   }
 
-  private async resolveVin(plate: string): Promise<string> {
+  private async resolveVin(plate: string, state?: string): Promise<string> {
     let statusCode: number;
     let body: unknown;
 
     try {
       const url = new URL(config.plateToVin.apiUrl);
       url.searchParams.set('plate', plate);
-      url.searchParams.set('country', 'US');
+      if (state) url.searchParams.set('state', state);
 
       const response = await request(url.toString(), {
         method: 'GET',
         headers: {
-          'X-Api-Key': config.plateToVin.apiKey,
-          Accept: 'application/json',
+          'x-rapidapi-key':  config.plateToVin.apiKey,
+          'x-rapidapi-host': config.plateToVin.rapidApiHost,
+          'Accept':          'application/json',
         },
-        bodyTimeout: config.httpTimeoutMs,
+        bodyTimeout:    config.httpTimeoutMs,
         headersTimeout: config.httpTimeoutMs,
       });
 

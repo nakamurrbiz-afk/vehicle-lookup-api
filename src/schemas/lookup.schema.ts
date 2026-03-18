@@ -10,6 +10,11 @@ export const LookupQuerySchema = z.object({
     .string({ required_error: 'country is required' })
     .length(2, 'country must be a 2-letter ISO code (e.g. GB, US)')
     .transform((s) => s.toUpperCase()),
+  state: z
+    .string()
+    .length(2, 'state must be a 2-letter US state code (e.g. CA, TX)')
+    .transform((s) => s.toUpperCase())
+    .optional(),
 });
 
 const MileageRecordSchema = z.object({
@@ -47,9 +52,14 @@ export const VehicleResponseSchema = z.object({
   runningCost:     RunningCostSchema.nullable(),
   euroncapStars:   z.number().int().nullable(),
   insuranceGroup:  InsuranceGroupSchema.nullable(),
-  popularityCount: z.number().int(),
-  source:          z.string(),
-  cachedAt:        z.string().nullable(),
+  popularityCount:     z.number().int(),
+  source:              z.string(),
+  cachedAt:            z.string().nullable(),
+  // US-specific
+  recallCount:         z.number().int().nullable(),
+  nhtsaSafetyRating:   z.number().int().nullable(),
+  mpgCity:             z.number().nullable(),
+  mpgHighway:          z.number().nullable(),
 });
 
 export type LookupQuery     = z.infer<typeof LookupQuerySchema>;

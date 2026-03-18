@@ -17,9 +17,14 @@ export interface AdapterResult {
   co2Emissions?: number | null;
   mileageHistory?: MileageRecord[];
   commonFailures?: string[];
+  // US-specific
+  recallCount?: number | null;
+  nhtsaSafetyRating?: number | null; // 1-5 stars
+  mpgCity?: number | null;
+  mpgHighway?: number | null;
 }
 
 export interface IVehicleAdapter {
   readonly country: string;
-  lookup(plate: string): Promise<AdapterResult>;
+  lookup(plate: string, state?: string): Promise<AdapterResult>;
 }

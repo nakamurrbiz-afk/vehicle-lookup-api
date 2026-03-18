@@ -1,12 +1,14 @@
 import { AdapterResult } from '../adapters/adapter.interface';
 import { IVehicleEnricher } from './enricher.interface';
 import { DvsaMotEnricher } from './uk/dvsa-mot.enricher';
+import { NhtsaSafetyEnricher } from './us/nhtsa-safety.enricher';
 
 class EnricherRegistry {
   private readonly enrichers = new Map<string, IVehicleEnricher[]>();
 
   constructor() {
     this.register(new DvsaMotEnricher());
+    this.register(new NhtsaSafetyEnricher());
   }
 
   register(enricher: IVehicleEnricher): void {

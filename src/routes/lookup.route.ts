@@ -19,8 +19,8 @@ export async function lookupRoute(app: FastifyInstance): Promise<void> {
       });
     }
 
-    const { plate, country } = queryParsed.data;
-    const cacheKey = `vehicle:${country}:${plate}`;
+    const { plate, country, state } = queryParsed.data;
+    const cacheKey = `vehicle:${country}:${state ?? ''}:${plate}`;
 
     // Always increment popularity (even for cache hits)
     const popularityCount = await incrementAndGet(app.cache, plate, country);
@@ -36,9 +36,9 @@ export async function lookupRoute(app: FastifyInstance): Promise<void> {
 
     // Cache MISS — check sample data first, then delegate to adapter
     const sampleResult = findSample(plate, country);
-    const adapterResult = sampleResult ?? await adapterRegistry.get(country).lookup(plate);
+    const adapterResult = sampleResult ?? await adapterRegistry.get(country).lookup(plate, state);
     const enrichedResult = await enricherRegistry.enrich(country, adapterResult);
-    const vehicleResponse = normalize(enrichedResult, null, popularityCount);
+    const vehicleResponse = await normalize(enrichedResult, null, popularityCount);
 
     await app.cache.set(cacheKey, JSON.stringify(vehicleResponse), config.cacheTtlSeconds);
 
