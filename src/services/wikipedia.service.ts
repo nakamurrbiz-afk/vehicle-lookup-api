@@ -1,5 +1,6 @@
 import { request } from 'undici';
 import { config } from '../config/env';
+import { MAKE_WIKI_FALLBACKS } from './manufacturer-image.service';
 
 export interface CarImage {
   url: string;
@@ -7,14 +8,27 @@ export interface CarImage {
   source: 'wikipedia' | 'none';
 }
 
-// Attempts multiple Wikipedia article title formats to find an image
-const titleCandidates = (make: string, model: string, year: number | null): string[] => {
-  const m = `${make}_${model}`.replace(/\s+/g, '_');
-  const candidates = [
-    m,
-    `${make}_${model}_${year ?? ''}`.replace(/\s+/g, '_').replace(/_$/, ''),
-  ];
-  return candidates;
+// Build Wikipedia article title candidates in priority order
+const titleCandidates = (make: string, model: string | null, year: number | null): string[] => {
+  const candidates: string[] = [];
+
+  if (model) {
+    const base = `${make}_${model}`.replace(/\s+/g, '_');
+    candidates.push(base);
+    if (year) {
+      candidates.push(`${make}_${model}_${year}`.replace(/\s+/g, '_'));
+    }
+  }
+
+  // Make-level fallbacks from curated registry (covers luxury brands well)
+  const fallbacks = MAKE_WIKI_FALLBACKS[make.toUpperCase().trim()] ?? [];
+  candidates.push(...fallbacks);
+
+  // Generic make-only article as last resort
+  candidates.push(make.replace(/\s+/g, '_'));
+
+  // Deduplicate while preserving order
+  return [...new Set(candidates)].filter(Boolean);
 };
 
 async function fetchWikipediaSummary(title: string): Promise<CarImage | null> {
@@ -57,7 +71,7 @@ async function fetchWikipediaSummary(title: string): Promise<CarImage | null> {
 
 export async function fetchCarImage(
   make: string,
-  model: string,
+  model: string | null,
   year: number | null,
 ): Promise<CarImage> {
   const candidates = titleCandidates(make, model, year);
@@ -67,5 +81,5 @@ export async function fetchCarImage(
     if (result) return result;
   }
 
-  return { url: '', alt: `${make} ${model}`, source: 'none' };
+  return { url: '', alt: model ? `${make} ${model}` : make, source: 'none' };
 }

@@ -1,63 +1,55 @@
 export interface ListingLink {
-  id:       string;
-  site:     string;
-  flag:     string;
-  url:      string;
-  cta:      string;
-  color:    string;
-  minPrice: string | null;
+  id:           string;
+  site:         string;
+  flag:         string;
+  url:          string;          // Direct search URL (always present)
+  affiliateUrl: string | null;   // Affiliate tracking URL — null until programme is activated
+  cta:          string;
+  color:        string;
+  minPrice:     string | null;
 }
 
 export function buildListings(
-  make:     string,
-  model:    string,
-  year:     number | null,
-  country:  string,
-  postcode?: string,          // UK postcode or US zip code
+  make:      string,
+  model:     string | null,      // null when DVSA model enrichment is pending
+  year:      number | null,
+  country:   string,
+  postcode?: string,             // UK postcode or US zip code
 ): ListingLink[] {
   const makeUC   = make.toUpperCase();
-  const modelUC  = model.toUpperCase();
   const makeLow  = make.toLowerCase();
-  const modelLow = model.toLowerCase().replace(/\s+/g, '-');
+  const modelUC  = model ? model.toUpperCase() : null;
+  const modelLow = model ? model.toLowerCase().replace(/\s+/g, '-') : null;
   const yearTo   = year ? year + 2 : new Date().getFullYear() + 1;
   const yearFrom = year ? year - 2 : undefined;
 
   if (country === 'GB') {
-    // Postcode formatted as "W1K 3JP" → URL uses "W1K+3JP"
     const pc = postcode ? postcode.trim().toUpperCase() : '';
 
     // ── AutoTrader UK ──────────────────────────────────────────────────
-    // Reference: https://www.autotrader.co.uk/car-search?channel=cars
-    //   &postcode=W1K+3JP&make=Toyota&model=Alphard
-    //   &homeDeliveryAdverts=exclude&advertising-location=at_cars&year-to=2026
     const atParams = new URLSearchParams({
       channel:                'cars',
       make:                   makeUC,
-      model:                  modelUC,
       'homeDeliveryAdverts':  'exclude',
       'advertising-location': 'at_cars',
       'year-to':              String(yearTo),
-      ...(yearFrom ? { 'year-from': String(yearFrom) } : {}),
-      ...(pc       ? { postcode: pc } : {}),
+      ...(modelUC    ? { model: modelUC }                : {}),
+      ...(yearFrom   ? { 'year-from': String(yearFrom) } : {}),
+      ...(pc         ? { postcode: pc }                  : {}),
     });
 
     // ── Motors.co.uk ───────────────────────────────────────────────────
-    // Pattern: /search/car/?make=toyota&model=alphard&postcode=W1K3JP
-    //   &radius=50&year-to=2026
     const moParams = new URLSearchParams({
       make:      makeLow,
-      model:     modelLow,
       'year-to': String(yearTo),
-      ...(yearFrom ? { 'year-from': String(yearFrom) } : {}),
+      ...(modelLow ? { model: modelLow }                 : {}),
+      ...(yearFrom ? { 'year-from': String(yearFrom) }   : {}),
       ...(pc       ? { postcode: pc.replace(/\s/g, ''), radius: '50' } : {}),
     });
 
     // ── Gumtree ────────────────────────────────────────────────────────
-    // Pattern: /search#q=Toyota+Alphard&searchCategory=cars-vans-motorbikes
-    //   &searchLocation=W1K+3JP&distance=30&sort=PRICE_ASCENDING
-    const gtBase   = 'https://www.gumtree.com/search';
-    const gtHash   = new URLSearchParams({
-      q:              `${make} ${model}`,
+    const gtHash = new URLSearchParams({
+      q:              model ? `${make} ${model}` : make,
       searchCategory: 'cars-vans-motorbikes',
       sort:           'PRICE_ASCENDING',
       ...(pc ? { searchLocation: pc, distance: '30' } : {}),
@@ -65,31 +57,34 @@ export function buildListings(
 
     return [
       {
-        id:       'autotrader-uk',
-        site:     'AutoTrader UK',
-        flag:     '🇬🇧',
-        url:      `https://www.autotrader.co.uk/car-search?${atParams}`,
-        cta:      'Search AutoTrader',
-        color:    '#FF6B35',
-        minPrice: null,
+        id:           'autotrader-uk',
+        site:         'AutoTrader UK',
+        flag:         '🇬🇧',
+        url:          `https://www.autotrader.co.uk/car-search?${atParams}`,
+        affiliateUrl: null,  // TODO: Awin affiliate ID — replace with tracking URL
+        cta:          'Search AutoTrader',
+        color:        '#FF6B35',
+        minPrice:     null,
       },
       {
-        id:       'motors-uk',
-        site:     'Motors.co.uk',
-        flag:     '🇬🇧',
-        url:      `https://www.motors.co.uk/search/car/?${moParams}`,
-        cta:      'Search Motors',
-        color:    '#005EB8',
-        minPrice: null,
+        id:           'motors-uk',
+        site:         'Motors.co.uk',
+        flag:         '🇬🇧',
+        url:          `https://www.motors.co.uk/search/car/?${moParams}`,
+        affiliateUrl: null,  // TODO: Affiliate URL
+        cta:          'Search Motors',
+        color:        '#005EB8',
+        minPrice:     null,
       },
       {
-        id:       'gumtree-uk',
-        site:     'Gumtree',
-        flag:     '🇬🇧',
-        url:      `${gtBase}#${gtHash}`,
-        cta:      'Search Gumtree',
-        color:    '#72BF44',
-        minPrice: null,
+        id:           'gumtree-uk',
+        site:         'Gumtree',
+        flag:         '🇬🇧',
+        url:          `https://www.gumtree.com/search#${gtHash}`,
+        affiliateUrl: null,  // TODO: Affiliate URL
+        cta:          'Search Gumtree',
+        color:        '#72BF44',
+        minPrice:     null,
       },
     ];
   }
@@ -98,124 +93,123 @@ export function buildListings(
     const zip = postcode ? postcode.trim() : '';
 
     // ── CarGurus ───────────────────────────────────────────────────────
-    // Pattern: /Cars/new/nl_Toyota_Alphard?zip=10001&distance=100
-    //   &sortDir=ASC&sortType=PRICE
     const cgParams = new URLSearchParams({
       sortDir:  'ASC',
       sortType: 'PRICE',
-      ...(zip ? { zip, distance: '100' } : {}),
-      ...(yearFrom ? { minYear: String(yearFrom) } : {}),
-      ...(yearTo   ? { maxYear: String(yearTo)   } : {}),
+      ...(zip      ? { zip, distance: '100' }          : {}),
+      ...(yearFrom ? { minYear: String(yearFrom) }      : {}),
+      ...(yearTo   ? { maxYear: String(yearTo) }        : {}),
     });
+    const cgPath = modelUC
+      ? `/Cars/new/nl_${encodeURIComponent(make)}_${encodeURIComponent(model!)}?${cgParams}`
+      : `/Cars/new/nl_${encodeURIComponent(make)}?${cgParams}`;
 
     // ── AutoTrader US ──────────────────────────────────────────────────
-    // Pattern: /cars-for-sale/used-cars/toyota/alphard/
-    //   ?zip=10001&searchRadius=100&sortBy=pricingLow
     const auParams = new URLSearchParams({
       sortBy: 'pricingLow',
-      ...(zip      ? { zip, searchRadius: '100' } : {}),
-      ...(yearFrom ? { startYear: String(yearFrom) } : {}),
-      ...(yearTo   ? { endYear:   String(yearTo)   } : {}),
+      ...(zip      ? { zip, searchRadius: '100' }       : {}),
+      ...(yearFrom ? { startYear: String(yearFrom) }    : {}),
+      ...(yearTo   ? { endYear: String(yearTo) }        : {}),
     });
+    const auPath = modelLow
+      ? `/cars-for-sale/used-cars/${makeLow}/${modelLow}/?${auParams}`
+      : `/cars-for-sale/used-cars/${makeLow}/?${auParams}`;
 
     // ── Cars.com ───────────────────────────────────────────────────────
-    // Pattern: /shopping/results/?makes[]=toyota&models[]=toyota-alphard
-    //   &stock_type=used&zip=10001&sort=list_price_asc
     const ccParams = new URLSearchParams({
       'makes[]':  makeLow,
-      'models[]': `${makeLow}-${modelLow}`,
       stock_type: 'used',
       sort:       'list_price_asc',
-      ...(zip ? { zip } : {}),
+      ...(modelLow ? { 'models[]': `${makeLow}-${modelLow}` } : {}),
+      ...(zip      ? { zip }                                   : {}),
     });
 
     return [
       {
-        id:       'cargurus-us',
-        site:     'CarGurus',
-        flag:     '🇺🇸',
-        url:      `https://www.cargurus.com/Cars/new/nl_${encodeURIComponent(make)}_${encodeURIComponent(model)}?${cgParams}`,
-        cta:      'Search CarGurus',
-        color:    '#00A0E9',
-        minPrice: null,
+        id:           'cargurus-us',
+        site:         'CarGurus',
+        flag:         '🇺🇸',
+        url:          `https://www.cargurus.com${cgPath}`,
+        affiliateUrl: null,
+        cta:          'Search CarGurus',
+        color:        '#00A0E9',
+        minPrice:     null,
       },
       {
-        id:       'autotrader-us',
-        site:     'AutoTrader US',
-        flag:     '🇺🇸',
-        url:      `https://www.autotrader.com/cars-for-sale/used-cars/${makeLow}/${modelLow}/?${auParams}`,
-        cta:      'Search AutoTrader',
-        color:    '#E4002B',
-        minPrice: null,
+        id:           'autotrader-us',
+        site:         'AutoTrader US',
+        flag:         '🇺🇸',
+        url:          `https://www.autotrader.com${auPath}`,
+        affiliateUrl: null,
+        cta:          'Search AutoTrader',
+        color:        '#E4002B',
+        minPrice:     null,
       },
       {
-        id:       'cars-com',
-        site:     'Cars.com',
-        flag:     '🇺🇸',
-        url:      `https://www.cars.com/shopping/results/?${ccParams}`,
-        cta:      'Search Cars.com',
-        color:    '#1B3A6B',
-        minPrice: null,
+        id:           'cars-com',
+        site:         'Cars.com',
+        flag:         '🇺🇸',
+        url:          `https://www.cars.com/shopping/results/?${ccParams}`,
+        affiliateUrl: null,
+        cta:          'Search Cars.com',
+        color:        '#1B3A6B',
+        minPrice:     null,
       },
     ];
   }
 
   if (country === 'JP') {
-    const makeUC  = make.toUpperCase();
-    const modelUC = model.toUpperCase();
-
     // ── Goo-net Exchange ──────────────────────────────────────────────
-    // Pattern: /usedcar/brand-TOYOTA/cartype-ALPHARD/
-    const gnParams = new URLSearchParams({
-      ...(yearFrom ? { minYear: String(yearFrom) } : {}),
-      ...(yearTo   ? { maxYear: String(yearTo)   } : {}),
-    });
-    const gnQuery = gnParams.toString() ? `?${gnParams}` : '';
+    const gnQuery = yearFrom ? `?minYear=${yearFrom}&maxYear=${yearTo}` : '';
+    const gnPath = modelUC
+      ? `/usedcar/brand-${encodeURIComponent(makeUC)}/cartype-${encodeURIComponent(modelUC)}/${gnQuery}`
+      : `/usedcar/brand-${encodeURIComponent(makeUC)}/${gnQuery}`;
 
     // ── CarSensor ─────────────────────────────────────────────────────
-    // Pattern: /usedcar/search.php?MAKENAME=TOYOTA&CARNAME=ALPHARD&sort=TP
     const csParams = new URLSearchParams({
       MAKENAME: makeUC,
-      CARNAME:  modelUC,
       sort:     'TP',
-      ...(yearFrom ? { MINYEAR: String(yearFrom) } : {}),
+      ...(modelUC  ? { CARNAME: modelUC }               : {}),
+      ...(yearFrom ? { MINYEAR: String(yearFrom) }      : {}),
     });
 
-    // ── Yahoo! 中古車 (carview) ───────────────────────────────────────
-    // Pattern: /usedcar/search/?Make=Toyota&CarName=Alphard&order=4
+    // ── Yahoo! 中古車 ─────────────────────────────────────────────────
     const yjParams = new URLSearchParams({
-      Make:    make,
-      CarName: model,
-      order:   '4',
+      Make:  make,
+      order: '4',
+      ...(model ? { CarName: model } : {}),
     });
 
     return [
       {
-        id:       'goonet-jp',
-        site:     'Goo-net Exchange',
-        flag:     '🇯🇵',
-        url:      `https://www.goo-net.com/usedcar/brand-${encodeURIComponent(makeUC)}/cartype-${encodeURIComponent(modelUC)}/${gnQuery}`,
-        cta:      'Search Goo-net',
-        color:    '#E60012',
-        minPrice: null,
+        id:           'goonet-jp',
+        site:         'Goo-net Exchange',
+        flag:         '🇯🇵',
+        url:          `https://www.goo-net.com${gnPath}`,
+        affiliateUrl: null,
+        cta:          'Search Goo-net',
+        color:        '#E60012',
+        minPrice:     null,
       },
       {
-        id:       'carsensor-jp',
-        site:     'CarSensor',
-        flag:     '🇯🇵',
-        url:      `https://www.carsensor.net/usedcar/search.php?${csParams}`,
-        cta:      'Search CarSensor',
-        color:    '#FF5500',
-        minPrice: null,
+        id:           'carsensor-jp',
+        site:         'CarSensor',
+        flag:         '🇯🇵',
+        url:          `https://www.carsensor.net/usedcar/search.php?${csParams}`,
+        affiliateUrl: null,
+        cta:          'Search CarSensor',
+        color:        '#FF5500',
+        minPrice:     null,
       },
       {
-        id:       'carview-jp',
-        site:     'Yahoo! 中古車',
-        flag:     '🇯🇵',
-        url:      `https://carview.yahoo.co.jp/usedcar/search/?${yjParams}`,
-        cta:      'Search Yahoo! 中古車',
-        color:    '#FF0033',
-        minPrice: null,
+        id:           'carview-jp',
+        site:         'Yahoo! 中古車',
+        flag:         '🇯🇵',
+        url:          `https://carview.yahoo.co.jp/usedcar/search/?${yjParams}`,
+        affiliateUrl: null,
+        cta:          'Search Yahoo! 中古車',
+        color:        '#FF0033',
+        minPrice:     null,
       },
     ];
   }

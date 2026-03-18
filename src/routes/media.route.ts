@@ -11,7 +11,7 @@ import {
 
 const QuerySchema = z.object({
   make:     z.string().min(1),
-  model:    z.string().min(1),
+  model:    z.string().optional(),   // optional — null when DVSA enrichment is pending
   year:     z.coerce.number().int().optional(),
   country:  z.string().length(2).transform(s => s.toUpperCase()),
   postcode: z.string().optional(),   // UK postcode or US zip code
@@ -21,15 +21,15 @@ const QuerySchema = z.object({
 async function enrichWithPrices(
   listings: ListingLink[],
   make: string,
-  model: string,
+  model: string | null,
   year: number | null,
   country: string,
 ): Promise<ListingLink[]> {
   if (country === 'GB') {
     const yearFrom = year ? year - 2 : undefined;
     const [at, mo] = await Promise.allSettled([
-      scrapeAutoTraderUK(make, model, yearFrom),
-      scrapeMotorsUK(make, model),
+      model ? scrapeAutoTraderUK(make, model, yearFrom) : Promise.resolve({ minPrice: null, count: null }),
+      model ? scrapeMotorsUK(make, model)               : Promise.resolve({ minPrice: null, count: null }),
     ]);
 
     return listings.map(l => {
@@ -43,8 +43,8 @@ async function enrichWithPrices(
 
   if (country === 'US') {
     const [cg, at] = await Promise.allSettled([
-      scrapeCarGurusUS(make, model),
-      scrapeAutoTraderUS(make, model),
+      model ? scrapeCarGurusUS(make, model)   : Promise.resolve({ minPrice: null, count: null }),
+      model ? scrapeAutoTraderUS(make, model) : Promise.resolve({ minPrice: null, count: null }),
     ]);
 
     return listings.map(l => {
@@ -71,9 +71,10 @@ export async function mediaRoute(app: FastifyInstance): Promise<void> {
       });
     }
 
-    const { make, model, year, country, postcode } = parsed.data;
+    const { make, year, country, postcode } = parsed.data;
+    const model = parsed.data.model ?? null;
     // postcode is user-specific → excluded from cache key (each user gets fresh URLs)
-    const cacheKey = `media:v2:${country}:${make}:${model}:${year ?? 'any'}`.toLowerCase();
+    const cacheKey = `media:v3:${country}:${make}:${model ?? 'unknown'}:${year ?? 'any'}`.toLowerCase();
 
     // For cached results, still inject the current postcode into listing URLs
     const cached = await app.cache.get(cacheKey);
