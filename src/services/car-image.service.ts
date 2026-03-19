@@ -28,14 +28,13 @@ function buildQueries(make: string, model: string | null, year: number | null): 
 }
 
 // Force a consistent 16:9 landscape crop via Unsplash/Imgix URL params.
-// Replaces fit=max (letterbox) with fit=crop&crop=entropy (smart-crop to subject).
 function to16x9(rawUrl: string): string {
   try {
     const u = new URL(rawUrl);
     u.searchParams.set('w',    '1200');
     u.searchParams.set('h',    '675');
     u.searchParams.set('fit',  'crop');
-    u.searchParams.set('crop', 'entropy');  // focus on visually interesting area
+    u.searchParams.set('crop', 'entropy');
     u.searchParams.set('q',    '85');
     return u.toString();
   } catch {
@@ -43,8 +42,8 @@ function to16x9(rawUrl: string): string {
   }
 }
 
-async function searchUnsplash(query: string): Promise<CarImage | null> {
-  const url = `https://api.unsplash.com/search/photos?query=${encodeURIComponent(query)}&per_page=1&orientation=landscape&content_filter=high`;
+async function searchUnsplashMultiple(query: string, count: number): Promise<CarImage[]> {
+  const url = `https://api.unsplash.com/search/photos?query=${encodeURIComponent(query)}&per_page=${count}&orientation=landscape&content_filter=high`;
   try {
     const res = await request(url, {
       method: 'GET',
@@ -55,35 +54,45 @@ async function searchUnsplash(query: string): Promise<CarImage | null> {
       bodyTimeout:    config.httpTimeoutMs,
       headersTimeout: config.httpTimeoutMs,
     });
-    if (res.statusCode !== 200) return null;
+    if (res.statusCode !== 200) return [];
     const body = await res.body.json() as UnsplashSearchResult;
-    const photo = body.results?.[0];
-    if (!photo) return null;
-    return {
+    return (body.results ?? []).map(photo => ({
       url:    to16x9(photo.urls.raw ?? photo.urls.full ?? photo.urls.regular),
       alt:    photo.alt_description ?? query,
-      source: 'unsplash',
-    };
+      source: 'unsplash' as const,
+    }));
   } catch {
-    return null;
+    return [];
   }
 }
 
-export async function fetchCarImage(
+// Returns up to 4 images: exterior shots first, then emblem
+export async function fetchCarImages(
   make: string,
   model: string | null,
   year: number | null,
-): Promise<CarImage> {
-  const alt = model ? `${make} ${model}` : make;
+): Promise<CarImage[]> {
+  if (!config.unsplash.accessKey) return [];
 
-  if (!config.unsplash.accessKey) {
-    return { url: '', alt, source: 'none' };
+  const exteriorQuery = buildQueries(make, model, year)[0] ?? `${make} car`;
+  const emblemQuery   = `${make} car badge emblem logo`;
+
+  const [exterior, emblem] = await Promise.allSettled([
+    searchUnsplashMultiple(exteriorQuery, 3),
+    searchUnsplashMultiple(emblemQuery, 1),
+  ]);
+
+  const images: CarImage[] = [];
+  if (exterior.status === 'fulfilled') images.push(...exterior.value);
+  if (emblem.status   === 'fulfilled') images.push(...emblem.value);
+
+  // Fallback: try broader queries if nothing found
+  if (images.length === 0) {
+    for (const q of buildQueries(make, model, year).slice(1)) {
+      const fallback = await searchUnsplashMultiple(q, 3);
+      if (fallback.length > 0) { images.push(...fallback); break; }
+    }
   }
 
-  for (const query of buildQueries(make, model, year)) {
-    const result = await searchUnsplash(query);
-    if (result) return result;
-  }
-
-  return { url: '', alt, source: 'none' };
+  return images;
 }

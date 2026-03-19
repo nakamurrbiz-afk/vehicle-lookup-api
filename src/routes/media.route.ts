@@ -1,6 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { fetchCarImage } from '../services/car-image.service';
+import { fetchCarImages } from '../services/car-image.service';
 import { buildListings, ListingLink } from '../services/listings.service';
 import { getNewCarPrice } from '../services/new-car-price.service';
 import {
@@ -126,7 +126,7 @@ export async function mediaRoute(app: FastifyInstance): Promise<void> {
 
     const { make, year, country, postcode } = parsed.data;
     const model = parsed.data.model ?? null;
-    const cacheKey = `media:v4:${country}:${make}:${model ?? 'unknown'}:${year ?? 'any'}`.toLowerCase();
+    const cacheKey = `media:v5:${country}:${make}:${model ?? 'unknown'}:${year ?? 'any'}`.toLowerCase();
 
     const cached = await app.cache.get(cacheKey);
     if (cached) {
@@ -139,13 +139,13 @@ export async function mediaRoute(app: FastifyInstance): Promise<void> {
 
     const baseListings = buildListings(make, model, year ?? null, country, postcode);
 
-    const [image, listings, prices] = await Promise.all([
-      fetchCarImage(make, model, year ?? null),
+    const [images, listings, prices] = await Promise.all([
+      fetchCarImages(make, model, year ?? null),
       enrichListingsWithPrices(baseListings, make, model, year ?? null, country),
       buildPriceSummary(make, model, year ?? null, country),
     ]);
 
-    const result = { image, listings, prices };
+    const result = { images, listings, prices };
 
     await app.cache.set(cacheKey, JSON.stringify(result), 1800);
     return reply.send(result);
