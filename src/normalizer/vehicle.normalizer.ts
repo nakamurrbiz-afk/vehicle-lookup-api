@@ -16,6 +16,7 @@ function titleCase(str: string): string {
 const SOURCE_MAP: Record<string, string> = {
   GB: 'dvla',
   US: 'nhtsa',
+  NL: 'rdw',
 };
 
 export async function normalize(
