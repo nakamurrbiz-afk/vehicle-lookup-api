@@ -158,6 +158,70 @@ export function buildListings(
     ];
   }
 
+  if (country === 'NL') {
+    // ── Marktplaats ────────────────────────────────────────────────────
+    const mpParams = new URLSearchParams({
+      query:      model ? `${make} ${model}` : make,
+      categoryId: '91',   // Auto's category
+      sortBy:     'PRICE',
+      sortOrder:  'INCREASING',
+      ...(yearFrom ? { 'attributes[constructionYearFrom]': String(yearFrom) } : {}),
+      ...(yearTo   ? { 'attributes[constructionYearTo]':   String(yearTo)   } : {}),
+    });
+
+    // ── AutoTrack ──────────────────────────────────────────────────────
+    const atParams = new URLSearchParams({
+      merk:  makeLow,
+      sort:  'price-asc',
+      ...(modelLow ? { model: modelLow }                  : {}),
+      ...(yearFrom ? { bouwjaarVan: String(yearFrom) }    : {}),
+      ...(yearTo   ? { bouwjaarTot: String(yearTo) }      : {}),
+    });
+
+    // ── Gaspedaal ──────────────────────────────────────────────────────
+    const gpPath = model
+      ? `/${makeLow}/${modelLow}/`
+      : `/${makeLow}/`;
+    const gpParams = new URLSearchParams({
+      sorteer: 'prijs-oplopend',
+      ...(yearFrom ? { bouwjaar_van: String(yearFrom) } : {}),
+      ...(yearTo   ? { bouwjaar_tot: String(yearTo) }   : {}),
+    });
+
+    return [
+      {
+        id:           'marktplaats-nl',
+        site:         'Marktplaats',
+        flag:         '🇳🇱',
+        url:          `https://www.marktplaats.nl/l/auto-s/?${mpParams}`,
+        affiliateUrl: null,
+        cta:          'Search Marktplaats',
+        color:        '#CC0000',
+        minPrice:     null,
+      },
+      {
+        id:           'autotrack-nl',
+        site:         'AutoTrack',
+        flag:         '🇳🇱',
+        url:          `https://www.autotrack.nl/aanbod/personenauto/?${atParams}`,
+        affiliateUrl: null,
+        cta:          'Search AutoTrack',
+        color:        '#003082',
+        minPrice:     null,
+      },
+      {
+        id:           'gaspedaal-nl',
+        site:         'Gaspedaal.nl',
+        flag:         '🇳🇱',
+        url:          `https://www.gaspedaal.nl${gpPath}?${gpParams}`,
+        affiliateUrl: null,
+        cta:          'Search Gaspedaal',
+        color:        '#FF6600',
+        minPrice:     null,
+      },
+    ];
+  }
+
   if (country === 'JP') {
     // ── Goo-net Exchange ──────────────────────────────────────────────
     const gnQuery = yearFrom ? `?minYear=${yearFrom}&maxYear=${yearTo}` : '';
