@@ -76,11 +76,48 @@ function collectUSDPrices(html: string): number[] {
   return prices;
 }
 
-function fmtGBP(p: number): string {
-  return '£' + p.toLocaleString('en-GB');
+function fmtGBP(p: number): string { return '£' + p.toLocaleString('en-GB'); }
+function fmtUSD(p: number): string { return '$' + p.toLocaleString('en-US'); }
+function fmtJPY(p: number): string {
+  const man = Math.round(p / 10000);
+  return man >= 1 ? `¥${man}万` : `¥${p.toLocaleString('ja-JP')}`;
 }
-function fmtUSD(p: number): string {
-  return '$' + p.toLocaleString('en-US');
+function fmtEUR(p: number): string { return '€' + p.toLocaleString('nl-NL'); }
+
+function collectJPYPrices(html: string): number[] {
+  const prices: number[] = [];
+  let m: RegExpExecArray | null;
+  // 58.0万円 / 58万円
+  const manRe = /(\d+(?:\.\d+)?)万円/g;
+  while ((m = manRe.exec(html)) !== null) {
+    const v = Math.round(parseFloat(m[1]) * 10000);
+    if (v >= 50000 && v <= 100_000_000) prices.push(v);
+  }
+  // 580,000円
+  const yenRe = /(\d{1,3}(?:,\d{3})+)円/g;
+  while ((m = yenRe.exec(html)) !== null) {
+    const v = parseInt(m[1].replace(/,/g, ''), 10);
+    if (v >= 50000 && v <= 100_000_000) prices.push(v);
+  }
+  return prices;
+}
+
+function collectEURPrices(html: string): number[] {
+  const prices: number[] = [];
+  let m: RegExpExecArray | null;
+  // €12.500 (Dutch dot-separator) or €12,500
+  const euRe = /€\s*(\d{1,3}(?:[.,]\d{3})*)/g;
+  while ((m = euRe.exec(html)) !== null) {
+    const v = parseInt(m[1].replace(/[.,]/g, ''), 10);
+    if (v >= 100 && v <= 500_000) prices.push(v);
+  }
+  // JSON: "price":12500
+  const jsonRe = /"(?:price|askingPrice|salePrice|priceRaw)"\s*:\s*(\d{3,7})/gi;
+  while ((m = jsonRe.exec(html)) !== null) {
+    const v = parseInt(m[1], 10);
+    if (v >= 100 && v <= 500_000) prices.push(v);
+  }
+  return prices;
 }
 
 // ── AutoTrader UK ────────────────────────────────────────
@@ -149,4 +186,49 @@ export async function scrapeAutoTraderUS(
   const prices = collectUSDPrices(html);
   if (prices.length === 0) return { minPrice: null, count: null };
   return { minPrice: fmtUSD(Math.min(...prices)), count: null };
+}
+
+// ── CarSensor JP ──────────────────────────────────────────
+export async function scrapeCarSensorJP(
+  make: string, model: string
+): Promise<ScrapeResult> {
+  const params = new URLSearchParams({
+    MAKENAME: make.toUpperCase(),
+    CARNAME:  model.toUpperCase(),
+    sort:     'TP',  // price ascending
+  });
+  const html = await fetchPage(`https://www.carsensor.net/usedcar/search.php?${params}`);
+  if (!html) return { minPrice: null, count: null };
+  const prices = collectJPYPrices(html);
+  if (prices.length === 0) return { minPrice: null, count: null };
+  return { minPrice: fmtJPY(Math.min(...prices)), count: null };
+}
+
+// ── Goo-net JP ────────────────────────────────────────────
+export async function scrapeGoonetJP(
+  make: string, model: string
+): Promise<ScrapeResult> {
+  const url  = `https://www.goo-net.com/usedcar/brand-${encodeURIComponent(make.toUpperCase())}/cartype-${encodeURIComponent(model.toUpperCase())}/?sort=3`;
+  const html = await fetchPage(url);
+  if (!html) return { minPrice: null, count: null };
+  const prices = collectJPYPrices(html);
+  if (prices.length === 0) return { minPrice: null, count: null };
+  return { minPrice: fmtJPY(Math.min(...prices)), count: null };
+}
+
+// ── Marktplaats NL ────────────────────────────────────────
+export async function scrapeMarktplaatsNL(
+  make: string, model: string
+): Promise<ScrapeResult> {
+  const params = new URLSearchParams({
+    query:      `${make} ${model}`,
+    categoryId: '91',
+    sortBy:     'PRICE',
+    sortOrder:  'INCREASING',
+  });
+  const html = await fetchPage(`https://www.marktplaats.nl/l/auto-s/?${params}`);
+  if (!html) return { minPrice: null, count: null };
+  const prices = collectEURPrices(html);
+  if (prices.length === 0) return { minPrice: null, count: null };
+  return { minPrice: fmtEUR(Math.min(...prices)), count: null };
 }

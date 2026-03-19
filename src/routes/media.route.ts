@@ -8,6 +8,9 @@ import {
   scrapeMotorsUK,
   scrapeCarGurusUS,
   scrapeAutoTraderUS,
+  scrapeCarSensorJP,
+  scrapeGoonetJP,
+  scrapeMarktplaatsNL,
 } from '../services/price-scraper.service';
 
 const QuerySchema = z.object({
@@ -69,6 +72,30 @@ async function buildPriceSummary(
     }
   }
 
+  if (country === 'JP' && model) {
+    const [cs, gn] = await Promise.allSettled([
+      scrapeCarSensorJP(make, model),
+      scrapeGoonetJP(make, model),
+    ]);
+    const candidates = [
+      cs.status === 'fulfilled' ? cs.value.minPrice : null,
+      gn.status === 'fulfilled' ? gn.value.minPrice : null,
+    ].filter(Boolean) as string[];
+
+    if (candidates.length > 0) {
+      usedFrom   = candidates[0];
+      usedSource = 'CarSensor / Goo-net';
+    }
+  }
+
+  if (country === 'NL' && model) {
+    const mp = await scrapeMarktplaatsNL(make, model).catch(() => ({ minPrice: null, count: null }));
+    if (mp.minPrice) {
+      usedFrom   = mp.minPrice;
+      usedSource = 'Marktplaats';
+    }
+  }
+
   return {
     new:  newPrice ? { from: newPrice.from, to: newPrice.to, note: newPrice.note, source: newPrice.source } : null,
     used: usedFrom ? { from: usedFrom, source: usedSource! } : null,
@@ -110,6 +137,28 @@ async function enrichListingsWithPrices(
       return l;
     });
   }
+
+  if (country === 'JP' && model) {
+    const [cs, gn] = await Promise.allSettled([
+      scrapeCarSensorJP(make, model),
+      scrapeGoonetJP(make, model),
+    ]);
+    return listings.map(l => {
+      if (l.id === 'carsensor-jp' && cs.status === 'fulfilled')
+        return { ...l, minPrice: cs.value.minPrice };
+      if (l.id === 'goonet-jp'    && gn.status === 'fulfilled')
+        return { ...l, minPrice: gn.value.minPrice };
+      return l;
+    });
+  }
+
+  if (country === 'NL' && model) {
+    const mp = await scrapeMarktplaatsNL(make, model).catch(() => ({ minPrice: null, count: null }));
+    return listings.map(l =>
+      l.id === 'marktplaats-nl' ? { ...l, minPrice: mp.minPrice } : l,
+    );
+  }
+
   return listings;
 }
 
