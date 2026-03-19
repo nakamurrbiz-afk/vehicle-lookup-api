@@ -10,31 +10,31 @@ export interface CarImage {
 interface UnsplashPhoto {
   urls: { raw: string; full: string; regular: string };
   alt_description: string | null;
-  user: { name: string };
 }
 
 interface UnsplashSearchResult {
   results: UnsplashPhoto[];
 }
 
-// Build search query: most specific first, then broaden
-function buildQueries(make: string, model: string | null, year: number | null): string[] {
+// Full-car exterior queries — emphasise full body, side/front view
+function buildBodyQueries(make: string, model: string | null, year: number | null): string[] {
   const base = model ? `${make} ${model}` : make;
   const queries: string[] = [];
-  if (model && year) queries.push(`${base} ${year} car`);
-  if (model)         queries.push(`${base} car`);
-  queries.push(`${make} car`);
+  if (model && year) queries.push(`${base} ${year} car exterior side view`);
+  if (model)         queries.push(`${base} car exterior side profile`);
+  queries.push(`${make} car exterior full body`);
+  queries.push(`${make} automobile`);
   return [...new Set(queries)];
 }
 
-// Force a consistent 16:9 landscape crop via Unsplash/Imgix URL params.
-function to16x9(rawUrl: string): string {
+// crop=center keeps the full car visible in the frame (vs entropy which zooms into detail)
+function to16x9(rawUrl: string, crop: 'center' | 'entropy' = 'center'): string {
   try {
     const u = new URL(rawUrl);
     u.searchParams.set('w',    '1200');
     u.searchParams.set('h',    '675');
     u.searchParams.set('fit',  'crop');
-    u.searchParams.set('crop', 'entropy');
+    u.searchParams.set('crop', crop);
     u.searchParams.set('q',    '85');
     return u.toString();
   } catch {
@@ -42,7 +42,11 @@ function to16x9(rawUrl: string): string {
   }
 }
 
-async function searchUnsplashMultiple(query: string, count: number): Promise<CarImage[]> {
+async function searchUnsplash(
+  query: string,
+  count: number,
+  crop: 'center' | 'entropy' = 'center',
+): Promise<CarImage[]> {
   const url = `https://api.unsplash.com/search/photos?query=${encodeURIComponent(query)}&per_page=${count}&orientation=landscape&content_filter=high`;
   try {
     const res = await request(url, {
@@ -57,7 +61,7 @@ async function searchUnsplashMultiple(query: string, count: number): Promise<Car
     if (res.statusCode !== 200) return [];
     const body = await res.body.json() as UnsplashSearchResult;
     return (body.results ?? []).map(photo => ({
-      url:    to16x9(photo.urls.raw ?? photo.urls.full ?? photo.urls.regular),
+      url:    to16x9(photo.urls.raw ?? photo.urls.full ?? photo.urls.regular, crop),
       alt:    photo.alt_description ?? query,
       source: 'unsplash' as const,
     }));
@@ -66,7 +70,7 @@ async function searchUnsplashMultiple(query: string, count: number): Promise<Car
   }
 }
 
-// Returns up to 4 images: exterior shots first, then emblem
+// Returns images: full-car exterior first (at least 1), emblem last
 export async function fetchCarImages(
   make: string,
   model: string | null,
@@ -74,25 +78,27 @@ export async function fetchCarImages(
 ): Promise<CarImage[]> {
   if (!config.unsplash.accessKey) return [];
 
-  const exteriorQuery = buildQueries(make, model, year)[0] ?? `${make} car`;
-  const emblemQuery   = `${make} car badge emblem logo`;
+  const bodyQueries = buildBodyQueries(make, model, year);
+  const emblemQuery = `${make} car emblem badge close-up`;
 
-  const [exterior, emblem] = await Promise.allSettled([
-    searchUnsplashMultiple(exteriorQuery, 3),
-    searchUnsplashMultiple(emblemQuery, 1),
+  // Fetch body shots (crop=center) and emblem (crop=entropy) in parallel
+  const [bodyResult, emblemResult] = await Promise.allSettled([
+    searchUnsplash(bodyQueries[0], 3, 'center'),
+    searchUnsplash(emblemQuery,    1, 'entropy'),
   ]);
 
-  const images: CarImage[] = [];
-  if (exterior.status === 'fulfilled') images.push(...exterior.value);
-  if (emblem.status   === 'fulfilled') images.push(...emblem.value);
+  const bodyImages   = bodyResult.status   === 'fulfilled' ? bodyResult.value   : [];
+  const emblemImages = emblemResult.status === 'fulfilled' ? emblemResult.value : [];
 
-  // Fallback: try broader queries if nothing found
-  if (images.length === 0) {
-    for (const q of buildQueries(make, model, year).slice(1)) {
-      const fallback = await searchUnsplashMultiple(q, 3);
-      if (fallback.length > 0) { images.push(...fallback); break; }
+  // Try fallback body queries if first returned nothing
+  let finalBodyImages = bodyImages;
+  if (finalBodyImages.length === 0) {
+    for (const q of bodyQueries.slice(1)) {
+      const fallback = await searchUnsplash(q, 3, 'center');
+      if (fallback.length > 0) { finalBodyImages = fallback; break; }
     }
   }
 
-  return images;
+  // Always put at least one body shot first, emblem last
+  return [...finalBodyImages, ...emblemImages];
 }

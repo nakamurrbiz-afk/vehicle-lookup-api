@@ -126,7 +126,7 @@ export async function mediaRoute(app: FastifyInstance): Promise<void> {
 
     const { make, year, country, postcode } = parsed.data;
     const model = parsed.data.model ?? null;
-    const cacheKey = `media:v5:${country}:${make}:${model ?? 'unknown'}:${year ?? 'any'}`.toLowerCase();
+    const cacheKey = `media:v6:${country}:${make}:${model ?? 'unknown'}:${year ?? 'any'}`.toLowerCase();
 
     const cached = await app.cache.get(cacheKey);
     if (cached) {
