@@ -49,6 +49,21 @@ function buildBodyQueries(make: string, model: string | null, year: number | nul
   return [...new Set(queries)];
 }
 
+// fit=clip scales to fit within 1200x675 without any cropping — full car always visible
+function toFullCar(url: string): string {
+  try {
+    const u = new URL(url);
+    u.searchParams.set('w',   '1200');
+    u.searchParams.set('h',   '675');
+    u.searchParams.set('fit', 'clip');
+    u.searchParams.delete('crop');
+    u.searchParams.set('q',   '85');
+    return u.toString();
+  } catch {
+    return url;
+  }
+}
+
 // crop=center keeps the full car in frame; crop=entropy zooms to visual detail
 function to16x9(rawUrl: string, crop: 'center' | 'entropy' = 'center'): string {
   try {
@@ -145,6 +160,11 @@ export async function fetchCarImages(
       .slice(0, 3)
       .map(({ img }) => img);
     images.push(...exterior);
+  }
+
+  // Ensure first image shows the full car — re-apply clip (no crop) to first Unsplash image
+  if (images.length > 0 && images[0].source === 'unsplash') {
+    images[0] = { ...images[0], url: toFullCar(images[0].url) };
   }
 
   // 3. Emblem last
