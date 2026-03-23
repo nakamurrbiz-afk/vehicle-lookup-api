@@ -15,17 +15,28 @@ interface UnsplashPhoto {
 }
 interface UnsplashSearchResult { results: UnsplashPhoto[]; }
 
-// Keywords that indicate a close-up/detail shot — filter these out
+// Keywords that confirm a full-car exterior shot
+const EXTERIOR_POSITIVE = [
+  'side', 'profile', 'exterior', 'full', 'front view', 'rear view',
+  'parked', 'road', 'highway', 'drive', 'sport', 'luxury', 'sedan',
+  'suv', 'hatchback', 'coupe', 'convertible', 'wagon',
+];
+
+// Keywords that indicate a close-up/detail shot — deprioritise or exclude
 const CLOSE_UP_KEYWORDS = [
   'emblem', 'badge', 'logo', 'interior', 'steering', 'dashboard',
   'close-up', 'close up', 'detail', 'macro', 'hood ornament',
-  'wheel rim', 'grille', 'headlight', 'taillight',
+  'wheel rim', 'grille', 'headlight', 'taillight', 'engine',
+  'seat', 'tire', 'instrument', 'console', 'cluster',
 ];
 
-function isExteriorShot(altDescription: string | null): boolean {
-  if (!altDescription) return true; // no description → keep it
+// Returns: 2 = confirmed exterior, 1 = unknown (keep), -1 = close-up (exclude)
+function exteriorScore(altDescription: string | null): number {
+  if (!altDescription) return 1; // unknown → keep but don't prioritise
   const desc = altDescription.toLowerCase();
-  return !CLOSE_UP_KEYWORDS.some(kw => desc.includes(kw));
+  if (CLOSE_UP_KEYWORDS.some(kw => desc.includes(kw))) return -1;
+  if (EXTERIOR_POSITIVE.some(kw => desc.includes(kw))) return 2;
+  return 1;
 }
 
 function buildBodyQueries(make: string, model: string | null, year: number | null): string[] {
@@ -111,7 +122,9 @@ export async function fetchCarImages(
   const emblemQuery = `${make} car emblem badge`;
 
   const [wikiResult, bodyResult, emblemResult] = await Promise.allSettled([
-    model ? fetchWikipediaImage(make, model) : Promise.resolve(null),
+    model
+      ? fetchWikipediaImage(make, model)
+      : fetchWikipediaImage(make, make),   // fallback: brand article (e.g. "Toyota")
     searchUnsplash(bodyQuery, 10, 'center'),   // fetch 10 so we have plenty to filter
     searchUnsplash(emblemQuery, 1, 'entropy'),
   ]);
@@ -123,11 +136,14 @@ export async function fetchCarImages(
     images.push(wikiResult.value);
   }
 
-  // 2. Filtered Unsplash exterior shots (no close-ups), up to 3
+  // 2. Unsplash: score, exclude close-ups, sort confirmed exteriors first, take up to 3
   if (bodyResult.status === 'fulfilled') {
     const exterior = bodyResult.value
-      .filter(img => isExteriorShot(img.alt))
-      .slice(0, 3);
+      .map(img => ({ img, score: exteriorScore(img.alt) }))
+      .filter(({ score }) => score !== -1)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 3)
+      .map(({ img }) => img);
     images.push(...exterior);
   }
 
