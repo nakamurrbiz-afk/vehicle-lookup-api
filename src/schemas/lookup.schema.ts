@@ -36,6 +36,12 @@ const InsuranceGroupSchema = z.object({
   label: z.string(),
 });
 
+const AffiliateLinkSchema = z.object({
+  platform: z.string(),
+  label:    z.string(),
+  url:      z.string().url(),
+});
+
 export const VehicleResponseSchema = z.object({
   plate:           z.string(),
   country:         z.string(),
@@ -55,6 +61,7 @@ export const VehicleResponseSchema = z.object({
   popularityCount:     z.number().int(),
   source:              z.string(),
   cachedAt:            z.string().nullable(),
+  affiliateLinks:      z.array(AffiliateLinkSchema),
   // US-specific
   recallCount:         z.number().int().nullable(),
   nhtsaSafetyRating:   z.number().int().nullable(),

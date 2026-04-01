@@ -4,6 +4,7 @@ import { getRunningCost } from '../services/running-cost.service';
 import { getEuroNcapRating } from '../services/euronmap.service';
 import { getInsuranceGroup } from '../services/insurance-group.service';
 import { getEpaMpg } from '../services/epa-fuel-economy.service';
+import { generateAffiliateLinks } from '../services/affiliate-links.service';
 
 function titleCase(str: string): string {
   return str
@@ -32,12 +33,16 @@ export async function normalize(
     if (epa) { mpgCity = epa.city; mpgHighway = epa.highway; }
   }
 
+  const make  = raw.rawMake  ? titleCase(raw.rawMake)  : null;
+  const model = raw.rawModel ? titleCase(raw.rawModel) : null;
+  const year  = raw.rawYear ?? null;
+
   return {
     plate:             raw.plate,
     country:           raw.country,
-    make:              raw.rawMake ? titleCase(raw.rawMake) : null,
-    model:             raw.rawModel ? titleCase(raw.rawModel) : null,
-    year:              raw.rawYear ?? null,
+    make,
+    model,
+    year,
     colour:            raw.colour ? titleCase(raw.colour) : null,
     fuelType:          raw.fuelType ? titleCase(raw.fuelType) : null,
     vin:               raw.vin ?? null,
@@ -48,6 +53,7 @@ export async function normalize(
     runningCost:       getRunningCost(raw.fuelType),
     euroncapStars:     getEuroNcapRating(raw.rawMake),
     insuranceGroup:    getInsuranceGroup(raw.rawMake),
+    affiliateLinks:    generateAffiliateLinks(make, model, year, raw.country),
     popularityCount,
     source:            SOURCE_MAP[raw.country.toUpperCase()] ?? 'unknown',
     cachedAt,

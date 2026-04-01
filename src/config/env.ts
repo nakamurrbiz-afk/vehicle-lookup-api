@@ -34,6 +34,9 @@ const EnvSchema = z.object({
   // Unsplash car imagery (free key at unsplash.com/developers)
   UNSPLASH_ACCESS_KEY: z.string().default(''),
 
+  // eBay Partner Network (EPN)
+  EBAY_CAMPAIGN_ID: z.string().default(''),
+
   // HTTP
   HTTP_TIMEOUT_MS: z.coerce.number().default(8000),
 });
@@ -71,6 +74,9 @@ export const config = {
   nhtsaApiUrl: env.NHTSA_API_URL,
   unsplash: {
     accessKey: env.UNSPLASH_ACCESS_KEY,
+  },
+  ebay: {
+    campaignId: env.EBAY_CAMPAIGN_ID,
   },
   redisUrl: env.REDIS_URL,
   cacheTtlSeconds: env.CACHE_TTL_SECONDS,
