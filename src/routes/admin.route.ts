@@ -209,19 +209,29 @@ async function load() {
   document.getElementById('stat-click-total').textContent  = data.summary.totalClicks.toLocaleString('ja-JP');
   document.getElementById('stat-click-today').textContent  = data.summary.todayClicks.toLocaleString('ja-JP');
 
-  // Shared options for horizontal bar charts (横軸=件数)
-  const hBarScales = {
-    x: { ...CHART_DEFAULTS.scales.x, beginAtZero: true,
-         title: { display: true, text: '件数', color: '#718096', font: { size: 10 } } },
-    y: { ticks: { color: '#e2e8f0', font: { size: 10 } }, grid: { color: '#2a2d3a' } },
+  // Axis style helpers
+  const valueAxis = (label) => ({
+    beginAtZero: true,
+    ticks:  { color: '#718096', font: { size: 10 } },
+    grid:   { color: '#2a2d3a' },
+    title:  { display: true, text: label, color: '#718096', font: { size: 10 } },
+  });
+  const categoryAxis = {
+    ticks: { color: '#e2e8f0', font: { size: 10 } },
+    grid:  { color: '#2a2d3a' },
+  };
+  const dateAxis = {
+    ticks: { color: '#718096', font: { size: 10 }, maxRotation: 45 },
+    grid:  { color: '#2a2d3a' },
+    title: { display: true, text: '日付', color: '#718096', font: { size: 10 } },
   };
 
-  // Chart 1: Daily search volume — horizontal bar, 横軸=件数, 縦軸=日付
+  // Chart 1: 日次検索数 — 縦棒グラフ（横軸=日付、縦軸=件数）
   destroyChart('search-daily');
   charts['search-daily'] = new Chart(document.getElementById('chart-search-daily'), {
     type: 'bar',
     data: {
-      labels: data.searches.daily.map(r => r.date.slice(5)),  // MM-DD (縦軸)
+      labels: data.searches.daily.map(r => r.date.slice(5)),  // MM-DD
       datasets: [{
         label: '検索数',
         data:  data.searches.daily.map(r => r.total),
@@ -232,13 +242,12 @@ async function load() {
       }],
     },
     options: {
-      indexAxis: 'y',
       plugins: { ...CHART_DEFAULTS.plugins, legend: { display: false } },
-      scales: hBarScales,
+      scales: { x: dateAxis, y: valueAxis('件数') },
     },
   });
 
-  // Chart 2: Top vehicles — horizontal bar, 横軸=件数, 縦軸=車種
+  // Chart 2: 車種別 Top 15 — 横棒グラフ（横軸=件数、縦軸=車種名）
   const vehicles = data.searches.topVehicles;
   destroyChart('top-vehicles');
   charts['top-vehicles'] = new Chart(document.getElementById('chart-top-vehicles'), {
@@ -257,11 +266,11 @@ async function load() {
     options: {
       indexAxis: 'y',
       plugins: { ...CHART_DEFAULTS.plugins, legend: { display: false } },
-      scales: hBarScales,
+      scales: { x: valueAxis('件数'), y: categoryAxis },
     },
   });
 
-  // Chart 3: Daily clicks by site (multi-line)
+  // Chart 3: 日次クリック数 — 折れ線（横軸=日付、縦軸=件数）
   const allSites = [...new Set(data.clicks.daily.flatMap(r => Object.keys(r.bySite)))];
   destroyChart('click-daily');
   charts['click-daily'] = new Chart(document.getElementById('chart-click-daily'), {
@@ -271,17 +280,20 @@ async function load() {
       datasets: allSites.map((site, i) => ({
         label: site,
         data:  data.clicks.daily.map(r => r.bySite[site] ?? 0),
-        borderColor: siteColor(site, i),
+        borderColor:     siteColor(site, i),
         backgroundColor: siteColor(site, i) + '22',
         tension: .35,
         pointRadius: 2,
         borderWidth: 2,
       })),
     },
-    options: CHART_DEFAULTS,
+    options: {
+      plugins: CHART_DEFAULTS.plugins,
+      scales: { x: dateAxis, y: valueAxis('件数') },
+    },
   });
 
-  // Chart 4: Total clicks by site (horizontal bar)
+  // Chart 4: サイト別累計クリック — 横棒グラフ（横軸=件数、縦軸=サイト名）
   const siteEntries = Object.entries(data.clicks.bySite).sort((a, b) => b[1] - a[1]);
   destroyChart('click-by-site');
   charts['click-by-site'] = new Chart(document.getElementById('chart-click-by-site'), {
@@ -294,15 +306,13 @@ async function load() {
         backgroundColor: siteEntries.map(([k], i) => siteColor(k, i) + 'cc'),
         borderColor:     siteEntries.map(([k], i) => siteColor(k, i)),
         borderWidth: 1,
+        borderRadius: 3,
       }],
     },
     options: {
       indexAxis: 'y',
       plugins: { ...CHART_DEFAULTS.plugins, legend: { display: false } },
-      scales: {
-        x: CHART_DEFAULTS.scales.x,
-        y: { ticks: { color: '#e2e8f0', font: { size: 11 } }, grid: { color: '#2a2d3a' } },
-      },
+      scales: { x: valueAxis('件数'), y: { ...categoryAxis, ticks: { ...categoryAxis.ticks, font: { size: 11 } } } },
     },
   });
 }
