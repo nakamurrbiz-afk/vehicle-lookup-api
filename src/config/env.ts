@@ -48,6 +48,9 @@ const EnvSchema = z.object({
   FR_PLATE_API_URL:        z.string().url().default('https://immatriculation-api.p.rapidapi.com/'),
   FR_PLATE_RAPIDAPI_HOST:  z.string().default('immatriculation-api.p.rapidapi.com'),
 
+  // Admin dashboard
+  ADMIN_TOKEN: z.string().min(16).default('change-me-before-deploying'),
+
   // HTTP
   HTTP_TIMEOUT_MS: z.coerce.number().default(8000),
 });
@@ -100,6 +103,7 @@ export const config = {
     apiUrl:      env.FR_PLATE_API_URL,
     rapidApiHost: env.FR_PLATE_RAPIDAPI_HOST,
   },
+  adminToken: env.ADMIN_TOKEN,
   redisUrl: env.REDIS_URL,
   cacheTtlSeconds: env.CACHE_TTL_SECONDS,
   httpTimeoutMs: env.HTTP_TIMEOUT_MS,

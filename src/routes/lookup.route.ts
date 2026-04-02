@@ -5,6 +5,7 @@ import { enricherRegistry } from '../enrichers/enricher.registry';
 import { normalize } from '../normalizer/vehicle.normalizer';
 import { findSample } from '../mocks/sample-vehicles';
 import { incrementAndGet } from '../services/popularity.service';
+import { searchTracker } from '../services/search-tracker.service';
 import { config } from '../config/env';
 
 export async function lookupRoute(app: FastifyInstance): Promise<void> {
@@ -25,12 +26,16 @@ export async function lookupRoute(app: FastifyInstance): Promise<void> {
     // Always increment popularity (even for cache hits)
     const popularityCount = await incrementAndGet(app.cache, plate, country);
 
+    const ts = new Date().toISOString();
+
     // Cache HIT
     const cached = await app.cache.get(cacheKey);
     if (cached) {
       const result: VehicleResponse = JSON.parse(cached);
-      result.cachedAt = result.cachedAt ?? new Date().toISOString();
+      result.cachedAt = result.cachedAt ?? ts;
       result.popularityCount = popularityCount;
+      searchTracker.record({ make: result.make ?? '', model: result.model, country, plate, ts })
+        .catch(() => {});
       return reply.send(result);
     }
 
@@ -41,6 +46,9 @@ export async function lookupRoute(app: FastifyInstance): Promise<void> {
     const vehicleResponse = await normalize(enrichedResult, null, popularityCount);
 
     await app.cache.set(cacheKey, JSON.stringify(vehicleResponse), config.cacheTtlSeconds);
+
+    searchTracker.record({ make: vehicleResponse.make ?? '', model: vehicleResponse.model, country, plate, ts })
+      .catch(() => {});
 
     return reply.send(vehicleResponse);
   });

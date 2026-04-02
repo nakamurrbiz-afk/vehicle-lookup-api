@@ -5,8 +5,10 @@ import cachePlugin from './plugins/cache.plugin';
 import { lookupRoute } from './routes/lookup.route';
 import { mediaRoute } from './routes/media.route';
 import { trackRoute } from './routes/track.route';
+import { adminRoute } from './routes/admin.route';
 import { registerErrorHandler } from './errors/error-handler';
 import { clickTracker } from './services/click-tracker.service';
+import { searchTracker } from './services/search-tracker.service';
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -23,6 +25,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(cors, { origin: true }); // allow all origins (incl. file://)
   await app.register(cachePlugin);
   await clickTracker.init();
+  await searchTracker.init();
 
   registerErrorHandler(app);
 
@@ -32,8 +35,12 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(lookupRoute, { prefix: '/v1' });
   await app.register(mediaRoute,  { prefix: '/v1' });
   await app.register(trackRoute,  { prefix: '/v1' });
+  await app.register(adminRoute,  { prefix: '/admin' });
 
-  app.addHook('onClose', async () => { await clickTracker.quit(); });
+  app.addHook('onClose', async () => {
+    await clickTracker.quit();
+    await searchTracker.quit();
+  });
 
   return app;
 }

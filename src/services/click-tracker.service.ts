@@ -20,6 +20,12 @@ export interface ClickStats {
   today: Record<string, number>;
 }
 
+export interface ClickDailyRow {
+  date:   string;
+  bySite: Record<string, number>;
+  total:  number;
+}
+
 class ClickTracker {
   private redis: Redis | null = null;
   // In-memory fallback when Redis is unavailable
@@ -71,6 +77,24 @@ class ClickTracker {
         Object.entries(obj ?? {}).map(([k, v]) => [k, parseInt(v, 10)]),
       );
     return { total: toNum(totalRaw), today: toNum(todayRaw) };
+  }
+
+  /** Returns per-site click breakdown for each of the last `days` days. */
+  async dailyHistory(days: number): Promise<ClickDailyRow[]> {
+    const dates = Array.from({ length: days }, (_, i) => {
+      const d = new Date();
+      d.setDate(d.getDate() - (days - 1 - i));
+      return d.toISOString().slice(0, 10);
+    });
+    if (!this.redis) return dates.map(date => ({ date, bySite: {}, total: 0 }));
+
+    const hashes = await Promise.all(dates.map(d => this.redis!.hgetall(KEY_DAILY(d))));
+    return dates.map((date, i) => {
+      const raw    = hashes[i] ?? {};
+      const bySite = Object.fromEntries(Object.entries(raw).map(([k, v]) => [k, parseInt(v, 10)]));
+      const total  = Object.values(bySite).reduce((s, v) => s + v, 0);
+      return { date, bySite, total };
+    });
   }
 
   async quit(): Promise<void> {
