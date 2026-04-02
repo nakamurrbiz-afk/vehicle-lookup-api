@@ -29,8 +29,9 @@ export interface TopVehicle {
 }
 
 class SearchTracker {
-  private redis: Redis | null = null;
-  private mem:   Record<string, number> = {};
+  private redis:    Redis | null = null;
+  private mem:      Record<string, number> = {};
+  private memDaily: Record<string, Record<string, number>> = {};
 
   async init(): Promise<void> {
     if (!config.redisUrl) return;
@@ -61,13 +62,20 @@ class SearchTracker {
       ]);
     } else {
       this.mem[hashKey] = (this.mem[hashKey] ?? 0) + 1;
+      if (!this.memDaily[today]) this.memDaily[today] = {};
+      this.memDaily[today][hashKey] = (this.memDaily[today][hashKey] ?? 0) + 1;
     }
   }
 
   /** Returns total search count per day for the last `days` days. */
   async dailyHistory(days: number): Promise<SearchDailyRow[]> {
     const dates = pastDates(days);
-    if (!this.redis) return dates.map(date => ({ date, total: 0 }));
+    if (!this.redis) {
+      return dates.map(date => ({
+        date,
+        total: Object.values(this.memDaily[date] ?? {}).reduce((s, v) => s + v, 0),
+      }));
+    }
 
     const hashes = await Promise.all(dates.map(d => this.redis!.hgetall(KEY_DAILY(d))));
     return dates.map((date, i) => ({

@@ -27,9 +27,9 @@ export interface ClickDailyRow {
 }
 
 class ClickTracker {
-  private redis: Redis | null = null;
-  // In-memory fallback when Redis is unavailable
-  private mem: Record<string, number> = {};
+  private redis:    Redis | null = null;
+  private mem:      Record<string, number> = {};
+  private memDaily: Record<string, Record<string, number>> = {};
 
   async init(): Promise<void> {
     if (!config.redisUrl) return;
@@ -60,6 +60,9 @@ class ClickTracker {
       ]);
     } else {
       this.mem[event.listingId] = (this.mem[event.listingId] ?? 0) + 1;
+      const today = event.ts.slice(0, 10);
+      if (!this.memDaily[today]) this.memDaily[today] = {};
+      this.memDaily[today][event.listingId] = (this.memDaily[today][event.listingId] ?? 0) + 1;
     }
   }
 
@@ -86,7 +89,13 @@ class ClickTracker {
       d.setDate(d.getDate() - (days - 1 - i));
       return d.toISOString().slice(0, 10);
     });
-    if (!this.redis) return dates.map(date => ({ date, bySite: {}, total: 0 }));
+    if (!this.redis) {
+      return dates.map(date => {
+        const bySite = { ...(this.memDaily[date] ?? {}) };
+        const total  = Object.values(bySite).reduce((s, v) => s + v, 0);
+        return { date, bySite, total };
+      });
+    }
 
     const hashes = await Promise.all(dates.map(d => this.redis!.hgetall(KEY_DAILY(d))));
     return dates.map((date, i) => {
