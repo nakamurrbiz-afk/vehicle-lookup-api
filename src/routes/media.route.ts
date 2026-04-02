@@ -11,6 +11,8 @@ import {
   scrapeCarSensorJP,
   scrapeGoonetJP,
   scrapeMarktplaatsNL,
+  scrapeLeBonCoinFR,
+  scrapeLaCentraleFR,
 } from '../services/price-scraper.service';
 
 const QuerySchema = z.object({
@@ -96,6 +98,24 @@ async function buildPriceSummary(
     }
   }
 
+  if (country === 'FR' && model) {
+    const [lbc, lc] = await Promise.allSettled([
+      scrapeLeBonCoinFR(make, model),
+      scrapeLaCentraleFR(make, model),
+    ]);
+    const candidates = [
+      lbc.status === 'fulfilled' ? lbc.value.minPrice : null,
+      lc.status  === 'fulfilled' ? lc.value.minPrice  : null,
+    ].filter(Boolean) as string[];
+
+    if (candidates.length > 0) {
+      usedFrom   = candidates[0];
+      usedSource = lbc.status === 'fulfilled' && lbc.value.minPrice
+        ? 'LeBonCoin'
+        : 'La Centrale';
+    }
+  }
+
   return {
     new:  newPrice ? { from: newPrice.from, to: newPrice.to, note: newPrice.note, source: newPrice.source } : null,
     used: usedFrom ? { from: usedFrom, source: usedSource! } : null,
@@ -157,6 +177,20 @@ async function enrichListingsWithPrices(
     return listings.map(l =>
       l.id === 'marktplaats-nl' ? { ...l, minPrice: mp.minPrice } : l,
     );
+  }
+
+  if (country === 'FR' && model) {
+    const [lbc, lc] = await Promise.allSettled([
+      scrapeLeBonCoinFR(make, model),
+      scrapeLaCentraleFR(make, model),
+    ]);
+    return listings.map(l => {
+      if (l.id === 'leboncoin-fr'  && lbc.status === 'fulfilled')
+        return { ...l, minPrice: lbc.value.minPrice };
+      if (l.id === 'lacentrale-fr' && lc.status  === 'fulfilled')
+        return { ...l, minPrice: lc.value.minPrice };
+      return l;
+    });
   }
 
   return listings;

@@ -216,6 +216,59 @@ export async function scrapeGoonetJP(
   return { minPrice: fmtJPY(Math.min(...prices)), count: null };
 }
 
+// ── LeBonCoin FR ─────────────────────────────────────────
+export async function scrapeLeBonCoinFR(
+  make: string, model: string
+): Promise<ScrapeResult> {
+  const params = new URLSearchParams({
+    text:     `${make} ${model}`,
+    category: '2',   // Voitures
+    sort:     'price',
+    order:    'asc',
+  });
+  const html = await fetchPage(`https://www.leboncoin.fr/recherche?${params}`);
+  if (!html) return { minPrice: null, count: null };
+
+  // LeBonCoin uses "12 500 €" (space-separated) and JSON price fields
+  function collectLBCPrices(src: string): number[] {
+    const prices: number[] = [];
+    let m: RegExpExecArray | null;
+    // JSON: "price":12500 / "priceRaw":12500
+    const jsonRe = /"(?:price|priceRaw|amount)"\s*:\s*(\d{3,7})/gi;
+    while ((m = jsonRe.exec(src)) !== null) {
+      const v = parseInt(m[1], 10);
+      if (v >= 100 && v <= 500_000) prices.push(v);
+    }
+    // Text: 12 500 € or 12500 €
+    const textRe = /(\d[\d\s]{2,6})\s*€/g;
+    while ((m = textRe.exec(src)) !== null) {
+      const v = parseInt(m[1].replace(/\s/g, ''), 10);
+      if (v >= 100 && v <= 500_000) prices.push(v);
+    }
+    return prices;
+  }
+
+  const next = extractNextData(html) as Record<string, unknown> | null;
+  const src  = next ? JSON.stringify(next) : html;
+  const prices = collectLBCPrices(src);
+  if (prices.length === 0) return { minPrice: null, count: null };
+  return { minPrice: fmtEUR(Math.min(...prices)), count: null };
+}
+
+// ── La Centrale FR ────────────────────────────────────────
+export async function scrapeLaCentraleFR(
+  make: string, model: string
+): Promise<ScrapeResult> {
+  const makeLow  = make.toLowerCase();
+  const modelLow = model.toLowerCase().replace(/\s+/g, '-');
+  const url = `https://www.lacentrale.fr/voitures/${makeLow}/${modelLow}/`;
+  const html = await fetchPage(url);
+  if (!html) return { minPrice: null, count: null };
+  const prices = collectEURPrices(html);
+  if (prices.length === 0) return { minPrice: null, count: null };
+  return { minPrice: fmtEUR(Math.min(...prices)), count: null };
+}
+
 // ── Marktplaats NL ────────────────────────────────────────
 export async function scrapeMarktplaatsNL(
   make: string, model: string

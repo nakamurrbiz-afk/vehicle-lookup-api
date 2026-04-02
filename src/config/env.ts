@@ -37,6 +37,17 @@ const EnvSchema = z.object({
   // eBay Partner Network (EPN)
   EBAY_CAMPAIGN_ID: z.string().default(''),
 
+  // Awin affiliate
+  AWIN_AFFILIATE_ID:                   z.string().default(''),
+  AWIN_AUTOTRADER_MERCHANT_ID:         z.coerce.number().default(3441),
+  AWIN_MOTORS_MERCHANT_ID:             z.coerce.number().default(10966),
+  AWIN_AUTOSCOUT24_FR_MERCHANT_ID:     z.coerce.number().default(15483),
+
+  // France — SIV plate lookup
+  FR_PLATE_API_KEY:        z.string().default(''),
+  FR_PLATE_API_URL:        z.string().url().default('https://immatriculation-api.p.rapidapi.com/'),
+  FR_PLATE_RAPIDAPI_HOST:  z.string().default('immatriculation-api.p.rapidapi.com'),
+
   // HTTP
   HTTP_TIMEOUT_MS: z.coerce.number().default(8000),
 });
@@ -77,6 +88,17 @@ export const config = {
   },
   ebay: {
     campaignId: env.EBAY_CAMPAIGN_ID,
+  },
+  awin: {
+    affiliateId:              env.AWIN_AFFILIATE_ID,
+    autotraderMerchantId:     env.AWIN_AUTOTRADER_MERCHANT_ID,
+    motorsMerchantId:         env.AWIN_MOTORS_MERCHANT_ID,
+    autoscout24FrMerchantId:  env.AWIN_AUTOSCOUT24_FR_MERCHANT_ID,
+  },
+  frPlate: {
+    apiKey:      env.FR_PLATE_API_KEY,
+    apiUrl:      env.FR_PLATE_API_URL,
+    rapidApiHost: env.FR_PLATE_RAPIDAPI_HOST,
   },
   redisUrl: env.REDIS_URL,
   cacheTtlSeconds: env.CACHE_TTL_SECONDS,

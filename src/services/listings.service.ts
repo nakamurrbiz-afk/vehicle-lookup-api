@@ -1,3 +1,15 @@
+import { config } from '../config/env';
+
+function buildAwinUrl(merchantId: number, destinationUrl: string): string | null {
+  if (!config.awin.affiliateId) return null;
+  const params = new URLSearchParams({
+    awinmid:  String(merchantId),
+    awinaffid: config.awin.affiliateId,
+    ued:      destinationUrl,
+  });
+  return `https://www.awin1.com/cread.php?${params.toString()}`;
+}
+
 export interface ListingLink {
   id:           string;
   site:         string;
@@ -61,7 +73,7 @@ export function buildListings(
         site:         'AutoTrader UK',
         flag:         '🇬🇧',
         url:          `https://www.autotrader.co.uk/car-search?${atParams}`,
-        affiliateUrl: null,  // TODO: Awin affiliate ID — replace with tracking URL
+        affiliateUrl: buildAwinUrl(config.awin.autotraderMerchantId, `https://www.autotrader.co.uk/car-search?${atParams}`),
         cta:          'Search AutoTrader',
         color:        '#FF6B35',
         minPrice:     null,
@@ -71,7 +83,7 @@ export function buildListings(
         site:         'Motors.co.uk',
         flag:         '🇬🇧',
         url:          `https://www.motors.co.uk/search/car/?${moParams}`,
-        affiliateUrl: null,  // TODO: Affiliate URL
+        affiliateUrl: buildAwinUrl(config.awin.motorsMerchantId, `https://www.motors.co.uk/search/car/?${moParams}`),
         cta:          'Search Motors',
         color:        '#005EB8',
         minPrice:     null,
@@ -273,6 +285,72 @@ export function buildListings(
         affiliateUrl: null,
         cta:          'Search Yahoo! 中古車',
         color:        '#FF0033',
+        minPrice:     null,
+      },
+    ];
+  }
+
+  if (country === 'FR') {
+    const query = model ? `${make} ${model}` : make;
+
+    // ── LeBonCoin ─────────────────────────────────────────────────────
+    const lbcParams = new URLSearchParams({
+      text:     query,
+      category: '2',   // Voitures
+      sort:     'price',
+      order:    'asc',
+      ...(yearFrom ? { regdate_min: String(yearFrom) } : {}),
+      ...(yearTo   ? { regdate_max: String(yearTo) }   : {}),
+    });
+
+    // ── La Centrale ───────────────────────────────────────────────────
+    const lcPath = modelLow
+      ? `/voitures/${makeLow}/${modelLow}/`
+      : `/voitures/${makeLow}/`;
+    const lcParams = new URLSearchParams({
+      ...(yearFrom ? { anneemin: String(yearFrom) } : {}),
+      ...(yearTo   ? { anneemax: String(yearTo) }   : {}),
+    });
+
+    // ── AutoScout24 FR ────────────────────────────────────────────────
+    const asParams = new URLSearchParams({
+      'make[]':  makeLow,
+      sort:      'price',
+      desc:      '0',
+      ...(modelLow ? { 'model[]': modelLow }          : {}),
+      ...(yearFrom ? { fregfrom: String(yearFrom) }   : {}),
+      ...(yearTo   ? { fregto:   String(yearTo) }     : {}),
+    });
+
+    return [
+      {
+        id:           'leboncoin-fr',
+        site:         'LeBonCoin',
+        flag:         '🇫🇷',
+        url:          `https://www.leboncoin.fr/recherche?${lbcParams}`,
+        affiliateUrl: null,
+        cta:          'Chercher sur LeBonCoin',
+        color:        '#F56B2A',
+        minPrice:     null,
+      },
+      {
+        id:           'lacentrale-fr',
+        site:         'La Centrale',
+        flag:         '🇫🇷',
+        url:          `https://www.lacentrale.fr${lcPath}?${lcParams}`,
+        affiliateUrl: null,
+        cta:          'Chercher sur La Centrale',
+        color:        '#C8102E',
+        minPrice:     null,
+      },
+      {
+        id:           'autoscout24-fr',
+        site:         'AutoScout24',
+        flag:         '🇫🇷',
+        url:          `https://www.autoscout24.fr/lst?${asParams}`,
+        affiliateUrl: buildAwinUrl(config.awin.autoscout24FrMerchantId, `https://www.autoscout24.fr/lst?${asParams}`),
+        cta:          'Chercher sur AutoScout24',
+        color:        '#003082',
         minPrice:     null,
       },
     ];
