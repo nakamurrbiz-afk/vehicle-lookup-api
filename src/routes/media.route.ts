@@ -29,16 +29,26 @@ interface PriceSummary {
   used: { from: string; source: string } | null;
 }
 
-async function buildPriceSummary(
+interface ScrapedData {
+  prices:   PriceSummary;
+  listings: ListingLink[];
+}
+
+/**
+ * Scrape prices once and use results for both the price summary card
+ * and the per-listing minPrice badges — avoids fetching the same URLs twice.
+ */
+async function scrapeAndBuild(
+  baseListings: ListingLink[],
   make: string,
   model: string | null,
   year: number | null,
   country: string,
-): Promise<PriceSummary> {
+): Promise<ScrapedData> {
   const newPrice = getNewCarPrice(make, model);
-
-  let usedFrom: string | null = null;
-  let usedSource: string | null = null;
+  const newSummary = newPrice
+    ? { from: newPrice.from, to: newPrice.to, note: newPrice.note, source: newPrice.source }
+    : null;
 
   if (country === 'GB' && model) {
     const yearFrom = year ? year - 2 : undefined;
@@ -47,16 +57,27 @@ async function buildPriceSummary(
       scrapeMotorsUK(make, model),
       scrapeCarGurusUK(make, model),
     ]);
-    const sources = [
-      { result: at, name: 'AutoTrader UK' },
-      { result: mo, name: 'Motors.co.uk' },
-      { result: cg, name: 'CarGurus UK' },
-    ];
-    const best = sources.find(s => s.result.status === 'fulfilled' && s.result.value.minPrice);
-    if (best && best.result.status === 'fulfilled') {
-      usedFrom   = best.result.value.minPrice;
-      usedSource = best.name;
-    }
+    const atVal = at.status === 'fulfilled' ? at.value : null;
+    const moVal = mo.status === 'fulfilled' ? mo.value : null;
+    const cgVal = cg.status === 'fulfilled' ? cg.value : null;
+
+    const best = atVal?.minPrice
+      ? { from: atVal.minPrice, source: 'AutoTrader UK' }
+      : moVal?.minPrice
+        ? { from: moVal.minPrice, source: 'Motors.co.uk' }
+        : cgVal?.minPrice
+          ? { from: cgVal.minPrice, source: 'CarGurus UK' }
+          : null;
+
+    return {
+      prices: { new: newSummary, used: best },
+      listings: baseListings.map(l => {
+        if (l.id === 'autotrader-uk' && atVal) return { ...l, minPrice: atVal.minPrice };
+        if (l.id === 'motors-uk'    && moVal) return { ...l, minPrice: moVal.minPrice };
+        if (l.id === 'cargurus-uk'  && cgVal) return { ...l, minPrice: cgVal.minPrice };
+        return l;
+      }),
+    };
   }
 
   if (country === 'US' && model) {
@@ -64,15 +85,20 @@ async function buildPriceSummary(
       scrapeCarGurusUS(make, model),
       scrapeAutoTraderUS(make, model),
     ]);
-    const candidates = [
-      cg.status === 'fulfilled' ? cg.value.minPrice : null,
-      at.status === 'fulfilled' ? at.value.minPrice : null,
-    ].filter(Boolean) as string[];
+    const cgVal = cg.status === 'fulfilled' ? cg.value : null;
+    const atVal = at.status === 'fulfilled' ? at.value : null;
 
-    if (candidates.length > 0) {
-      usedFrom   = candidates[0];
-      usedSource = 'CarGurus / AutoTrader US';
-    }
+    const usedFrom = cgVal?.minPrice ?? atVal?.minPrice ?? null;
+    const used = usedFrom ? { from: usedFrom, source: 'CarGurus / AutoTrader US' } : null;
+
+    return {
+      prices: { new: newSummary, used },
+      listings: baseListings.map(l => {
+        if (l.id === 'cargurus-us'   && cgVal) return { ...l, minPrice: cgVal.minPrice };
+        if (l.id === 'autotrader-us' && atVal) return { ...l, minPrice: atVal.minPrice };
+        return l;
+      }),
+    };
   }
 
   if (country === 'JP' && model) {
@@ -80,23 +106,32 @@ async function buildPriceSummary(
       scrapeCarSensorJP(make, model),
       scrapeGoonetJP(make, model),
     ]);
-    const candidates = [
-      cs.status === 'fulfilled' ? cs.value.minPrice : null,
-      gn.status === 'fulfilled' ? gn.value.minPrice : null,
-    ].filter(Boolean) as string[];
+    const csVal = cs.status === 'fulfilled' ? cs.value : null;
+    const gnVal = gn.status === 'fulfilled' ? gn.value : null;
 
-    if (candidates.length > 0) {
-      usedFrom   = candidates[0];
-      usedSource = 'CarSensor / Goo-net';
-    }
+    const usedFrom = csVal?.minPrice ?? gnVal?.minPrice ?? null;
+    const used = usedFrom ? { from: usedFrom, source: 'CarSensor / Goo-net' } : null;
+
+    return {
+      prices: { new: newSummary, used },
+      listings: baseListings.map(l => {
+        if (l.id === 'carsensor-jp' && csVal) return { ...l, minPrice: csVal.minPrice };
+        if (l.id === 'goonet-jp'    && gnVal) return { ...l, minPrice: gnVal.minPrice };
+        return l;
+      }),
+    };
   }
 
   if (country === 'NL' && model) {
     const mp = await scrapeMarktplaatsNL(make, model).catch(() => ({ minPrice: null, count: null }));
-    if (mp.minPrice) {
-      usedFrom   = mp.minPrice;
-      usedSource = 'Marktplaats';
-    }
+    const used = mp.minPrice ? { from: mp.minPrice, source: 'Marktplaats' } : null;
+
+    return {
+      prices: { new: newSummary, used },
+      listings: baseListings.map(l =>
+        l.id === 'marktplaats-nl' ? { ...l, minPrice: mp.minPrice } : l,
+      ),
+    };
   }
 
   if (country === 'FR' && model) {
@@ -104,100 +139,27 @@ async function buildPriceSummary(
       scrapeLeBonCoinFR(make, model),
       scrapeLaCentraleFR(make, model),
     ]);
-    const candidates = [
-      lbc.status === 'fulfilled' ? lbc.value.minPrice : null,
-      lc.status  === 'fulfilled' ? lc.value.minPrice  : null,
-    ].filter(Boolean) as string[];
+    const lbcVal = lbc.status === 'fulfilled' ? lbc.value : null;
+    const lcVal  = lc.status  === 'fulfilled' ? lc.value  : null;
 
-    if (candidates.length > 0) {
-      usedFrom   = candidates[0];
-      usedSource = lbc.status === 'fulfilled' && lbc.value.minPrice
-        ? 'LeBonCoin'
-        : 'La Centrale';
-    }
+    const usedFrom = lbcVal?.minPrice ?? lcVal?.minPrice ?? null;
+    const usedSource = lbcVal?.minPrice ? 'LeBonCoin' : 'La Centrale';
+    const used = usedFrom ? { from: usedFrom, source: usedSource } : null;
+
+    return {
+      prices: { new: newSummary, used },
+      listings: baseListings.map(l => {
+        if (l.id === 'leboncoin-fr'  && lbcVal) return { ...l, minPrice: lbcVal.minPrice };
+        if (l.id === 'lacentrale-fr' && lcVal)  return { ...l, minPrice: lcVal.minPrice };
+        return l;
+      }),
+    };
   }
 
   return {
-    new:  newPrice ? { from: newPrice.from, to: newPrice.to, note: newPrice.note, source: newPrice.source } : null,
-    used: usedFrom ? { from: usedFrom, source: usedSource! } : null,
+    prices:   { new: newSummary, used: null },
+    listings: baseListings,
   };
-}
-
-// Attach scraped prices to each listing entry
-async function enrichListingsWithPrices(
-  listings: ListingLink[],
-  make: string,
-  model: string | null,
-  year: number | null,
-  country: string,
-): Promise<ListingLink[]> {
-  if (country === 'GB') {
-    const yearFrom = year ? year - 2 : undefined;
-    const [at, mo, cg] = await Promise.allSettled([
-      model ? scrapeAutoTraderUK(make, model, yearFrom) : Promise.resolve({ minPrice: null, count: null }),
-      model ? scrapeMotorsUK(make, model)               : Promise.resolve({ minPrice: null, count: null }),
-      model ? scrapeCarGurusUK(make, model)             : Promise.resolve({ minPrice: null, count: null }),
-    ]);
-    return listings.map(l => {
-      if (l.id === 'autotrader-uk' && at.status === 'fulfilled')
-        return { ...l, minPrice: at.value.minPrice };
-      if (l.id === 'motors-uk'    && mo.status === 'fulfilled')
-        return { ...l, minPrice: mo.value.minPrice };
-      if (l.id === 'cargurus-uk'  && cg.status === 'fulfilled')
-        return { ...l, minPrice: cg.value.minPrice };
-      return l;
-    });
-  }
-  if (country === 'US') {
-    const [cg, at] = await Promise.allSettled([
-      model ? scrapeCarGurusUS(make, model)   : Promise.resolve({ minPrice: null, count: null }),
-      model ? scrapeAutoTraderUS(make, model) : Promise.resolve({ minPrice: null, count: null }),
-    ]);
-    return listings.map(l => {
-      if (l.id === 'cargurus-us'   && cg.status === 'fulfilled')
-        return { ...l, minPrice: cg.value.minPrice };
-      if (l.id === 'autotrader-us' && at.status === 'fulfilled')
-        return { ...l, minPrice: at.value.minPrice };
-      return l;
-    });
-  }
-
-  if (country === 'JP' && model) {
-    const [cs, gn] = await Promise.allSettled([
-      scrapeCarSensorJP(make, model),
-      scrapeGoonetJP(make, model),
-    ]);
-    return listings.map(l => {
-      if (l.id === 'carsensor-jp' && cs.status === 'fulfilled')
-        return { ...l, minPrice: cs.value.minPrice };
-      if (l.id === 'goonet-jp'    && gn.status === 'fulfilled')
-        return { ...l, minPrice: gn.value.minPrice };
-      return l;
-    });
-  }
-
-  if (country === 'NL' && model) {
-    const mp = await scrapeMarktplaatsNL(make, model).catch(() => ({ minPrice: null, count: null }));
-    return listings.map(l =>
-      l.id === 'marktplaats-nl' ? { ...l, minPrice: mp.minPrice } : l,
-    );
-  }
-
-  if (country === 'FR' && model) {
-    const [lbc, lc] = await Promise.allSettled([
-      scrapeLeBonCoinFR(make, model),
-      scrapeLaCentraleFR(make, model),
-    ]);
-    return listings.map(l => {
-      if (l.id === 'leboncoin-fr'  && lbc.status === 'fulfilled')
-        return { ...l, minPrice: lbc.value.minPrice };
-      if (l.id === 'lacentrale-fr' && lc.status  === 'fulfilled')
-        return { ...l, minPrice: lc.value.minPrice };
-      return l;
-    });
-  }
-
-  return listings;
 }
 
 export async function mediaRoute(app: FastifyInstance): Promise<void> {
@@ -213,7 +175,7 @@ export async function mediaRoute(app: FastifyInstance): Promise<void> {
 
     const { make, year, country, postcode } = parsed.data;
     const model = parsed.data.model ?? null;
-    const cacheKey = `media:v7:${country}:${make}:${model ?? 'unknown'}:${year ?? 'any'}`.toLowerCase();
+    const cacheKey = `media:v8:${country}:${make}:${model ?? 'unknown'}:${year ?? 'any'}`.toLowerCase();
 
     const cached = await app.cache.get(cacheKey);
     if (cached) {
@@ -226,13 +188,12 @@ export async function mediaRoute(app: FastifyInstance): Promise<void> {
 
     const baseListings = buildListings(make, model, year ?? null, country, postcode);
 
-    const [images, listings, prices] = await Promise.all([
+    const [images, scraped] = await Promise.all([
       fetchCarImages(make, model, year ?? null),
-      enrichListingsWithPrices(baseListings, make, model, year ?? null, country),
-      buildPriceSummary(make, model, year ?? null, country),
+      scrapeAndBuild(baseListings, make, model, year ?? null, country),
     ]);
 
-    const result = { images, listings, prices };
+    const result = { images, listings: scraped.listings, prices: scraped.prices };
 
     await app.cache.set(cacheKey, JSON.stringify(result), 1800);
     return reply.send(result);

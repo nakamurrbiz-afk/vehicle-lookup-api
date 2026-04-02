@@ -2,6 +2,7 @@ import { IVehicleAdapter } from './adapter.interface';
 import { DvlaAdapter } from './uk/dvla.adapter';
 import { PlateToVinAdapter } from './us/plate-to-vin.adapter';
 import { RdwAdapter } from './nl/rdw.adapter';
+import { SivAdapter } from './fr/siv.adapter';
 import { UnsupportedCountryError } from '../errors/app.errors';
 
 class AdapterRegistry {
@@ -11,6 +12,7 @@ class AdapterRegistry {
     this.register(new DvlaAdapter());
     this.register(new PlateToVinAdapter());
     this.register(new RdwAdapter());
+    this.register(new SivAdapter());
   }
 
   register(adapter: IVehicleAdapter): void {

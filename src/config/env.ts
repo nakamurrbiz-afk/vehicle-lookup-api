@@ -53,7 +53,8 @@ const EnvSchema = z.object({
   ADMIN_TOKEN: z.string().min(16).default('change-me-before-deploying'),
 
   // HTTP
-  HTTP_TIMEOUT_MS: z.coerce.number().default(8000),
+  HTTP_TIMEOUT_MS:         z.coerce.number().default(8000),
+  SCRAPE_TIMEOUT_MS:       z.coerce.number().default(3000),
 });
 
 const parsed = EnvSchema.safeParse(process.env);
@@ -108,5 +109,6 @@ export const config = {
   adminToken: env.ADMIN_TOKEN,
   redisUrl: env.REDIS_URL,
   cacheTtlSeconds: env.CACHE_TTL_SECONDS,
-  httpTimeoutMs: env.HTTP_TIMEOUT_MS,
+  httpTimeoutMs:   env.HTTP_TIMEOUT_MS,
+  scrapeTimeoutMs: env.SCRAPE_TIMEOUT_MS,
 } as const;

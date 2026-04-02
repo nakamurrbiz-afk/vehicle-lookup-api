@@ -19,8 +19,8 @@ async function fetchPage(url: string): Promise<string | null> {
     const res = await request(url, {
       method: 'GET',
       headers: BROWSER_HEADERS,
-      bodyTimeout: config.httpTimeoutMs,
-      headersTimeout: config.httpTimeoutMs,
+      bodyTimeout: config.scrapeTimeoutMs,
+      headersTimeout: config.scrapeTimeoutMs,
       maxRedirections: 3,
     });
     if (res.statusCode !== 200) return null;
