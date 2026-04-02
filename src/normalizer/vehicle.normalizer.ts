@@ -4,7 +4,6 @@ import { getRunningCost } from '../services/running-cost.service';
 import { getEuroNcapRating } from '../services/euronmap.service';
 import { getInsuranceGroup } from '../services/insurance-group.service';
 import { getEpaMpg } from '../services/epa-fuel-economy.service';
-import { generateAffiliateLinks } from '../services/affiliate-links.service';
 
 function titleCase(str: string): string {
   return str
@@ -53,7 +52,7 @@ export async function normalize(
     runningCost:       getRunningCost(raw.fuelType),
     euroncapStars:     getEuroNcapRating(raw.rawMake),
     insuranceGroup:    getInsuranceGroup(raw.rawMake),
-    affiliateLinks:    generateAffiliateLinks(make, model, year, raw.country),
+    affiliateLinks:    [],
     popularityCount,
     source:            SOURCE_MAP[raw.country.toUpperCase()] ?? 'unknown',
     cachedAt,
