@@ -209,26 +209,36 @@ async function load() {
   document.getElementById('stat-click-total').textContent  = data.summary.totalClicks.toLocaleString('ja-JP');
   document.getElementById('stat-click-today').textContent  = data.summary.todayClicks.toLocaleString('ja-JP');
 
-  // Chart 1: Daily search volume
+  // Shared options for horizontal bar charts (横軸=件数)
+  const hBarScales = {
+    x: { ...CHART_DEFAULTS.scales.x, beginAtZero: true,
+         title: { display: true, text: '件数', color: '#718096', font: { size: 10 } } },
+    y: { ticks: { color: '#e2e8f0', font: { size: 10 } }, grid: { color: '#2a2d3a' } },
+  };
+
+  // Chart 1: Daily search volume — horizontal bar, 横軸=件数, 縦軸=日付
   destroyChart('search-daily');
   charts['search-daily'] = new Chart(document.getElementById('chart-search-daily'), {
-    type: 'line',
+    type: 'bar',
     data: {
-      labels: data.searches.daily.map(r => r.date.slice(5)),  // MM-DD
+      labels: data.searches.daily.map(r => r.date.slice(5)),  // MM-DD (縦軸)
       datasets: [{
         label: '検索数',
         data:  data.searches.daily.map(r => r.total),
-        borderColor: '#6366f1',
-        backgroundColor: 'rgba(99,102,241,.15)',
-        fill: true,
-        tension: .35,
-        pointRadius: 3,
+        backgroundColor: 'rgba(99,102,241,.7)',
+        borderColor:     '#6366f1',
+        borderWidth: 1,
+        borderRadius: 3,
       }],
     },
-    options: { ...CHART_DEFAULTS, plugins: { ...CHART_DEFAULTS.plugins, legend: { display: false } } },
+    options: {
+      indexAxis: 'y',
+      plugins: { ...CHART_DEFAULTS.plugins, legend: { display: false } },
+      scales: hBarScales,
+    },
   });
 
-  // Chart 2: Top vehicles (horizontal bar)
+  // Chart 2: Top vehicles — horizontal bar, 横軸=件数, 縦軸=車種
   const vehicles = data.searches.topVehicles;
   destroyChart('top-vehicles');
   charts['top-vehicles'] = new Chart(document.getElementById('chart-top-vehicles'), {
@@ -241,15 +251,13 @@ async function load() {
         backgroundColor: vehicles.map((_, i) => PALETTE[i % PALETTE.length] + 'cc'),
         borderColor:     vehicles.map((_, i) => PALETTE[i % PALETTE.length]),
         borderWidth: 1,
+        borderRadius: 3,
       }],
     },
     options: {
       indexAxis: 'y',
       plugins: { ...CHART_DEFAULTS.plugins, legend: { display: false } },
-      scales: {
-        x: CHART_DEFAULTS.scales.x,
-        y: { ticks: { color: '#e2e8f0', font: { size: 10 } }, grid: { color: '#2a2d3a' } },
-      },
+      scales: hBarScales,
     },
   });
 

@@ -6,6 +6,7 @@ import { getNewCarPrice } from '../services/new-car-price.service';
 import {
   scrapeAutoTraderUK,
   scrapeMotorsUK,
+  scrapeCarGurusUK,
   scrapeCarGurusUS,
   scrapeAutoTraderUS,
   scrapeCarSensorJP,
@@ -41,20 +42,20 @@ async function buildPriceSummary(
 
   if (country === 'GB' && model) {
     const yearFrom = year ? year - 2 : undefined;
-    const [at, mo] = await Promise.allSettled([
+    const [at, mo, cg] = await Promise.allSettled([
       scrapeAutoTraderUK(make, model, yearFrom),
       scrapeMotorsUK(make, model),
+      scrapeCarGurusUK(make, model),
     ]);
-    const candidates = [
-      at.status === 'fulfilled' ? at.value.minPrice : null,
-      mo.status === 'fulfilled' ? mo.value.minPrice : null,
-    ].filter(Boolean) as string[];
-
-    if (candidates.length > 0) {
-      usedFrom   = candidates[0];
-      usedSource = at.status === 'fulfilled' && at.value.minPrice
-        ? 'AutoTrader UK'
-        : 'Motors.co.uk';
+    const sources = [
+      { result: at, name: 'AutoTrader UK' },
+      { result: mo, name: 'Motors.co.uk' },
+      { result: cg, name: 'CarGurus UK' },
+    ];
+    const best = sources.find(s => s.result.status === 'fulfilled' && s.result.value.minPrice);
+    if (best && best.result.status === 'fulfilled') {
+      usedFrom   = best.result.value.minPrice;
+      usedSource = best.name;
     }
   }
 
@@ -132,15 +133,18 @@ async function enrichListingsWithPrices(
 ): Promise<ListingLink[]> {
   if (country === 'GB') {
     const yearFrom = year ? year - 2 : undefined;
-    const [at, mo] = await Promise.allSettled([
+    const [at, mo, cg] = await Promise.allSettled([
       model ? scrapeAutoTraderUK(make, model, yearFrom) : Promise.resolve({ minPrice: null, count: null }),
       model ? scrapeMotorsUK(make, model)               : Promise.resolve({ minPrice: null, count: null }),
+      model ? scrapeCarGurusUK(make, model)             : Promise.resolve({ minPrice: null, count: null }),
     ]);
     return listings.map(l => {
       if (l.id === 'autotrader-uk' && at.status === 'fulfilled')
         return { ...l, minPrice: at.value.minPrice };
-      if (l.id === 'motors-uk' && mo.status === 'fulfilled')
+      if (l.id === 'motors-uk'    && mo.status === 'fulfilled')
         return { ...l, minPrice: mo.value.minPrice };
+      if (l.id === 'cargurus-uk'  && cg.status === 'fulfilled')
+        return { ...l, minPrice: cg.value.minPrice };
       return l;
     });
   }

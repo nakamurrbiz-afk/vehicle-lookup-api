@@ -162,6 +162,18 @@ export async function scrapeMotorsUK(
   return { minPrice: fmtGBP(Math.min(...prices)), count: null };
 }
 
+// ── CarGurus UK ───────────────────────────────────────────
+export async function scrapeCarGurusUK(
+  make: string, model: string
+): Promise<ScrapeResult> {
+  const url  = `https://www.cargurus.co.uk/Cars/new/nl_${encodeURIComponent(make)}_${encodeURIComponent(model)}?sortDir=ASC&sortType=PRICE`;
+  const html = await fetchPage(url);
+  if (!html) return { minPrice: null, count: null };
+  const prices = collectGBPPrices(html);
+  if (prices.length === 0) return { minPrice: null, count: null };
+  return { minPrice: fmtGBP(Math.min(...prices)), count: null };
+}
+
 // ── CarGurus US ───────────────────────────────────────────
 export async function scrapeCarGurusUS(
   make: string, model: string

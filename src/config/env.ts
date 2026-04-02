@@ -42,6 +42,7 @@ const EnvSchema = z.object({
   AWIN_AUTOTRADER_MERCHANT_ID:         z.coerce.number().default(3441),
   AWIN_MOTORS_MERCHANT_ID:             z.coerce.number().default(10966),
   AWIN_AUTOSCOUT24_FR_MERCHANT_ID:     z.coerce.number().default(15483),
+  AWIN_CARGURUS_UK_MERCHANT_ID:        z.coerce.number().default(9081),
 
   // France — SIV plate lookup
   FR_PLATE_API_KEY:        z.string().default(''),
@@ -97,6 +98,7 @@ export const config = {
     autotraderMerchantId:     env.AWIN_AUTOTRADER_MERCHANT_ID,
     motorsMerchantId:         env.AWIN_MOTORS_MERCHANT_ID,
     autoscout24FrMerchantId:  env.AWIN_AUTOSCOUT24_FR_MERCHANT_ID,
+    cargurusUkMerchantId:     env.AWIN_CARGURUS_UK_MERCHANT_ID,
   },
   frPlate: {
     apiKey:      env.FR_PLATE_API_KEY,

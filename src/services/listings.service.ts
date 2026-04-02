@@ -59,13 +59,17 @@ export function buildListings(
       ...(pc       ? { postcode: pc.replace(/\s/g, ''), radius: '50' } : {}),
     });
 
-    // ── Gumtree ────────────────────────────────────────────────────────
-    const gtHash = new URLSearchParams({
-      q:              model ? `${make} ${model}` : make,
-      searchCategory: 'cars-vans-motorbikes',
-      sort:           'PRICE_ASCENDING',
-      ...(pc ? { searchLocation: pc, distance: '30' } : {}),
+    // ── CarGurus UK ────────────────────────────────────────────────────
+    const cgParams = new URLSearchParams({
+      sortDir:  'ASC',
+      sortType: 'PRICE',
+      ...(pc       ? { zip: pc, distance: '25' }           : {}),
+      ...(yearFrom ? { minYear: String(yearFrom) }         : {}),
+      ...(yearTo   ? { maxYear: String(yearTo) }           : {}),
     });
+    const cgPath = modelUC
+      ? `/Cars/new/nl_${encodeURIComponent(make)}_${encodeURIComponent(model!)}?${cgParams}`
+      : `/Cars/new/nl_${encodeURIComponent(make)}?${cgParams}`;
 
     return [
       {
@@ -89,13 +93,13 @@ export function buildListings(
         minPrice:     null,
       },
       {
-        id:           'gumtree-uk',
-        site:         'Gumtree',
+        id:           'cargurus-uk',
+        site:         'CarGurus UK',
         flag:         '🇬🇧',
-        url:          `https://www.gumtree.com/search#${gtHash}`,
-        affiliateUrl: null,  // TODO: Affiliate URL
-        cta:          'Search Gumtree',
-        color:        '#72BF44',
+        url:          `https://www.cargurus.co.uk${cgPath}`,
+        affiliateUrl: buildAwinUrl(config.awin.cargurusUkMerchantId, `https://www.cargurus.co.uk${cgPath}`),
+        cta:          'Search CarGurus',
+        color:        '#00A0E9',
         minPrice:     null,
       },
     ];
