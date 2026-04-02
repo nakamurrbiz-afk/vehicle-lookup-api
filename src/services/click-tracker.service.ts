@@ -1,5 +1,11 @@
 import { Redis } from 'ioredis';
 import { config } from '../config/env';
+import { readStore, writeStore } from './file-store.service';
+
+interface ClickFileStore {
+  total:    Record<string, number>;
+  daily:    Record<string, Record<string, number>>;
+}
 
 // Keys
 const KEY_TOTAL  = 'clicks:total';                              // Hash: listingId → count
@@ -32,19 +38,23 @@ class ClickTracker {
   private memDaily: Record<string, Record<string, number>> = {};
 
   async init(): Promise<void> {
-    if (!config.redisUrl) return;
-    try {
-      const client = new Redis(config.redisUrl, {
-        lazyConnect:          true,
-        connectTimeout:       3_000,
-        maxRetriesPerRequest: 1,
-        retryStrategy:        () => null,
-      });
-      await client.connect();
-      this.redis = client;
-    } catch {
-      // Redis unavailable — fall back to in-memory + log
+    if (config.redisUrl) {
+      try {
+        const client = new Redis(config.redisUrl, {
+          lazyConnect:          true,
+          connectTimeout:       3_000,
+          maxRetriesPerRequest: 1,
+          retryStrategy:        () => null,
+        });
+        await client.connect();
+        this.redis = client;
+        return;
+      } catch { /* fall through to file store */ }
     }
+    // No Redis — load persisted data from file
+    const stored = readStore<ClickFileStore>('clicks', { total: {}, daily: {} });
+    this.mem      = stored.total;
+    this.memDaily = stored.daily;
   }
 
   async record(event: ClickEvent): Promise<void> {
@@ -60,9 +70,9 @@ class ClickTracker {
       ]);
     } else {
       this.mem[event.listingId] = (this.mem[event.listingId] ?? 0) + 1;
-      const today = event.ts.slice(0, 10);
       if (!this.memDaily[today]) this.memDaily[today] = {};
       this.memDaily[today][event.listingId] = (this.memDaily[today][event.listingId] ?? 0) + 1;
+      writeStore<ClickFileStore>('clicks', { total: this.mem, daily: this.memDaily });
     }
   }
 

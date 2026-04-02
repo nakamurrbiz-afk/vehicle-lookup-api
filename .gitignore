@@ -20,3 +20,6 @@ npm-debug.log*
 # OS
 .DS_Store
 Thumbs.db
+
+# Tracker data (persisted locally, not for VCS)
+data/*.json

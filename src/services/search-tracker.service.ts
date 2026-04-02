@@ -1,5 +1,11 @@
 import { Redis } from 'ioredis';
 import { config } from '../config/env';
+import { readStore, writeStore } from './file-store.service';
+
+interface SearchFileStore {
+  total: Record<string, number>;
+  daily: Record<string, Record<string, number>>;
+}
 
 const KEY_TOTAL        = 'searches:total';
 const KEY_DAILY        = (d: string) => `searches:daily:${d}`;
@@ -34,17 +40,23 @@ class SearchTracker {
   private memDaily: Record<string, Record<string, number>> = {};
 
   async init(): Promise<void> {
-    if (!config.redisUrl) return;
-    try {
-      const client = new Redis(config.redisUrl, {
-        lazyConnect:          true,
-        connectTimeout:       3_000,
-        maxRetriesPerRequest: 1,
-        retryStrategy:        () => null,
-      });
-      await client.connect();
-      this.redis = client;
-    } catch { /* fall back to in-memory */ }
+    if (config.redisUrl) {
+      try {
+        const client = new Redis(config.redisUrl, {
+          lazyConnect:          true,
+          connectTimeout:       3_000,
+          maxRetriesPerRequest: 1,
+          retryStrategy:        () => null,
+        });
+        await client.connect();
+        this.redis = client;
+        return;
+      } catch { /* fall through to file store */ }
+    }
+    // No Redis — load persisted data from file
+    const stored = readStore<SearchFileStore>('searches', { total: {}, daily: {} });
+    this.mem      = stored.total;
+    this.memDaily = stored.daily;
   }
 
   async record(event: SearchEvent): Promise<void> {
@@ -64,6 +76,7 @@ class SearchTracker {
       this.mem[hashKey] = (this.mem[hashKey] ?? 0) + 1;
       if (!this.memDaily[today]) this.memDaily[today] = {};
       this.memDaily[today][hashKey] = (this.memDaily[today][hashKey] ?? 0) + 1;
+      writeStore<SearchFileStore>('searches', { total: this.mem, daily: this.memDaily });
     }
   }
 
