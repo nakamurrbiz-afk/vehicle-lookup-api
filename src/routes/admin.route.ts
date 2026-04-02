@@ -6,12 +6,15 @@ import { searchTracker } from '../services/search-tracker.service';
 const DAYS = 30;
 
 // ── Auth helper ───────────────────────────────────────────────────────────────
-function isAuthorized(request: { query: Record<string, string>; headers: Record<string, string | string[] | undefined> }): boolean {
-  const token = config.adminToken;
-  if (!token || token === 'change-me-before-deploying') return false;
-  const fromQuery  = (request.query as Record<string, string>)['token'];
-  const fromHeader = (request.headers['authorization'] ?? '').toString().replace(/^Bearer\s+/i, '');
-  return fromQuery === token || fromHeader === token;
+// Read directly from process.env to avoid any module-load-order caching issues
+function expectedToken(): string {
+  return process.env.ADMIN_TOKEN ?? config.adminToken;
+}
+
+function checkToken(candidate: string | undefined): boolean {
+  const expected = expectedToken();
+  if (!expected || expected === 'change-me-before-deploying') return false;
+  return typeof candidate === 'string' && candidate === expected;
 }
 
 // ── Admin data payload ────────────────────────────────────────────────────────
@@ -304,25 +307,32 @@ setInterval(load, 60_000);
 </html>`;
 }
 
+type AdminQuery = { token?: string };
+
 // ── Route registration ────────────────────────────────────────────────────────
 export async function adminRoute(app: FastifyInstance): Promise<void> {
-  const unauthorized = () => ({ status: 401, title: 'Unauthorized', detail: 'Valid token required' });
+  const unauthorized = { status: 401, title: 'Unauthorized', detail: 'Valid token required' };
 
   // Dashboard HTML
-  app.get<{ Querystring: Record<string, string> }>('/dashboard', async (request, reply) => {
-    if (!isAuthorized(request as any)) {
-      return reply.status(401).header('WWW-Authenticate', 'Bearer').send(unauthorized());
+  app.get<{ Querystring: AdminQuery }>('/dashboard', async (request, reply) => {
+    const tokenFromQuery  = request.query.token;
+    const tokenFromHeader = (request.headers.authorization ?? '').replace(/^Bearer\s+/i, '');
+    if (!checkToken(tokenFromQuery) && !checkToken(tokenFromHeader)) {
+      return reply.status(401).header('WWW-Authenticate', 'Bearer').send(unauthorized);
     }
-    const token = (request.query as Record<string, string>)['token'] ?? '';
     return reply
       .header('Content-Type', 'text/html; charset=utf-8')
       .header('Cache-Control', 'no-store')
-      .send(dashboardHtml(token));
+      .send(dashboardHtml(tokenFromQuery ?? tokenFromHeader ?? ''));
   });
 
   // JSON data endpoint (used by the dashboard JS)
-  app.get<{ Querystring: Record<string, string> }>('/data', async (request, reply) => {
-    if (!isAuthorized(request as any)) return reply.status(401).send(unauthorized());
+  app.get<{ Querystring: AdminQuery }>('/data', async (request, reply) => {
+    const tokenFromQuery  = request.query.token;
+    const tokenFromHeader = (request.headers.authorization ?? '').replace(/^Bearer\s+/i, '');
+    if (!checkToken(tokenFromQuery) && !checkToken(tokenFromHeader)) {
+      return reply.status(401).send(unauthorized);
+    }
     return reply.send(await buildAdminData());
   });
 }
