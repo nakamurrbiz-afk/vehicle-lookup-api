@@ -6,6 +6,7 @@ import { lookupRoute } from './routes/lookup.route';
 import { mediaRoute } from './routes/media.route';
 import { trackRoute } from './routes/track.route';
 import { adminRoute } from './routes/admin.route';
+import { gameRoute } from './routes/game.route';
 import { registerErrorHandler } from './errors/error-handler';
 import { clickTracker } from './services/click-tracker.service';
 import { searchTracker } from './services/search-tracker.service';
@@ -36,6 +37,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(mediaRoute,  { prefix: '/v1' });
   await app.register(trackRoute,  { prefix: '/v1' });
   await app.register(adminRoute,  { prefix: '/admin' });
+  await app.register(gameRoute,   { prefix: '/v1' });
 
   app.addHook('onClose', async () => {
     await clickTracker.quit();
