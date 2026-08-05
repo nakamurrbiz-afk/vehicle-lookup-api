@@ -8,8 +8,11 @@ export class VehicleNotFoundError extends Error {
 
 export class UnsupportedCountryError extends Error {
   readonly statusCode = 400;
-  constructor(country: string) {
-    super(`Plate lookup for "${country}" is not currently supported. Available: GB, US.`);
+  constructor(country: string, available?: string[]) {
+    super(
+      `Plate lookup for "${country}" is not currently supported.` +
+        (available?.length ? ` Available: ${available.join(', ')}.` : ''),
+    );
     this.name = 'UnsupportedCountryError';
   }
 }
